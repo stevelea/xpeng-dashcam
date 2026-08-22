@@ -1,0 +1,6 @@
+{
+  "_type": "configuration",
+  "monitoring": 2,
+  "locatorInterval": 30,
+  "locatorDisplacement": 100
+}

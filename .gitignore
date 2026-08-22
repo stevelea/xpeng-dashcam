@@ -1,0 +1,25 @@
+.venv/
+__pycache__/
+.DS_Store
+*.bak
+*.bak[0-9]
+data/*.db
+data/*.db-*
+thumbs/
+data/backups/
+server.log
+*.log
+.memsearch/
+
+# Eigen instellingen: bevat adres, IP en mapnamen
+config.json
+config.json.bak
+nl.*.xpeng-herinnering.plist
+
+# OwnTracks-export kan broker-URL en wachtwoord bevatten
+*.otrc
+owntracks/*-link.txt
+
+# NAS-specifiek: bevat het pad en eigenaar-ID van de eigen NAS
+nas-scripts/
+

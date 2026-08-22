@@ -1,0 +1,44 @@
+{
+  "root": "/path/to/your/dashcam/files",
+  "folders": {
+    "normaal": "XP_DCIM",
+    "noodgeval": "XP_EMER_DCIM"
+  },
+  "timezone": "Europe/Amsterdam",
+  "views": {
+    "primary": "front"
+  },
+  "thumbs": {
+    "seek_seconds": 3,
+    "width": 400,
+    "quality": 5,
+    "workers": 6
+  },
+  "web": {
+    "port": 8965
+  },
+  "photos": {
+    "library": "",
+    "margin_min": 20
+  },
+  "trips": {
+    "gap_seconds": 300,
+    "sample_every": 5,
+    "workers": 6
+  },
+  "logger": {
+    "url": "",
+    "volgorde": []
+  },
+  "thuis": {
+    "lat": null,
+    "lon": null,
+    "naam": ""
+  },
+  "herinnering": {
+    "grens_dagen": 21,
+    "stilte_dagen": 7,
+    "ha_url": "",
+    "dienst": ""
+  }
+}

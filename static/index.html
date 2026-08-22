@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="nl" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>XPENG dashcam</title>
+<link rel="icon" type="image/png" sizes="32x32" href="img/xpeng-32.png">
+<link rel="apple-touch-icon" href="img/xpeng-180.png">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<link rel="stylesheet" href="style.css?v=32">
+<link rel="stylesheet" href="viewer.css?v=32">
+</head>
+<body>
+<div class="wrap breed">
+
+  <header>
+    <div class="brandmark" title="XPENG"></div>
+    <div class="titles">
+      <h1>Dashcam</h1>
+      <div class="sub" id="subtitle">laden…</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="theme-toggle taalknop" id="btn-taal" title="Nederlands / English">NL</button>
+    <button class="theme-toggle" id="btn-settings" title="Instellingen" data-i18n-title="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H2a2 2 0 110-4h.09A1.65 1.65 0 004.6 8a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 3.6 1.65 1.65 0 0010 2.09V2a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 8v0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    </button>
+    <button class="theme-toggle" id="btn-theme" title="Thema wisselen" data-i18n-title="theme">
+      <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+    </button>
+  </header>
+
+  <div class="hoofd">
+
+    <!-- ── Links: kies een dag ─────────────────────────────────────────────── -->
+    <aside class="zijkant">
+      <div class="card knoppenkaart">
+        <div class="knoppenrij">
+          <button class="ikoonknop alleen-smal" id="btn-kal" title="Kies een dag" data-i18n-title="day_pick">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+            <span data-i18n="day_pick">Kies een dag</span></button>
+          <button class="ikoonknop" id="btn-nood" title="Alle noodopnames" data-i18n-title="emergency_all">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16H3z"/><path d="M12 9v5M12 17h.01"/></svg>
+            <span data-i18n="emergency_all">Alle noodopnames</span></button>
+          <button class="ikoonknop" id="btn-alles-kaart" title="Kaart van alles" data-i18n-title="map_all">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg>
+            <span data-i18n="map_all">Kaart van alles</span></button>
+        </div>
+      </div>
+
+      <div class="card kalenderkaart">
+        <div class="kalender" id="kal-dagen"></div>
+      </div>
+
+      <div class="card zoekkaart">
+        <h2 data-i18n="search_time">Zoeken op tijd</h2>
+        <div class="zoekvelden">
+          <input type="date" id="s-date">
+          <input type="time" id="s-time" value="12:00">
+        </div>
+        <button class="small" id="btn-search" data-i18n="search_btn">Zoek beelden</button>
+        <div id="searchinfo" class="muted"></div>
+      </div>
+
+    </aside>
+
+    <!-- ── Rechts: de dag, de rit, de beelden ──────────────────────────────── -->
+    <main class="inhoud">
+
+      <div class="card" id="dagkaart">
+        <div class="cardhead">
+          <h2 id="dagtitel" data-i18n="day_pick">Kies een dag</h2>
+          <span class="pill" id="dagtelling"></span>
+        </div>
+        <div id="dagritten" class="dagritten"></div>
+        <div class="uitleg" id="dagritten-uitleg">
+          <span><i class="lijn gemeten"></i><span data-i18n="route_measured">route gemeten</span></span>
+          <span><i class="lijn gereconstrueerd"></i><span data-i18n="route_rebuilt">route gereconstrueerd</span></span>
+          <span><i class="lijn geen"></i><span data-i18n="route_none">geen route bekend</span></span>
+        </div>
+      </div>
+
+      <div class="card hidden" id="ritkaart">
+        <div class="cardhead">
+          <h2 id="rittitel">Rit</h2>
+          <span class="routemerk hidden" id="routemerk"></span>
+          <div class="spacer"></div>
+          <button class="small ghost" id="btn-meet" data-i18n="measure_km">Kilometers meten</button>
+          <button class="small ghost" id="btn-route" data-i18n="build_route">Route bepalen</button>
+          <button class="small ghost" id="btn-ritdicht" data-i18n="close">Sluiten</button>
+        </div>
+        <div id="ritkaartje" class="ritkaartje"></div>
+        <div id="ritpunten" class="ritpunten"></div>
+      </div>
+
+      <div class="card">
+        <div class="cardhead">
+          <h2 id="beeldenkop" data-i18n="footage">Beelden</h2>
+          <span class="pill" id="beeldentelling"></span>
+        </div>
+        <div id="grid" class="grid"></div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ── Speler ─────────────────────────────────────────────────────────────── -->
+<div class="overlay hidden" id="player">
+  <div class="playerbox">
+    <div class="playerhead">
+      <div>
+        <div class="playertitle" id="p-title">–</div>
+        <div class="muted" id="p-sub">–</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="viewswitch" id="p-views"></div>
+      <a class="btn small ghost" id="p-download" href="#" download data-i18n="download">Bewaren</a>
+      <button class="small ghost" id="p-close" data-i18n="close">Sluiten</button>
+    </div>
+    <video id="p-video" controls autoplay playsinline></video>
+    <div class="playernav">
+      <button class="small ghost" id="p-prev" data-i18n="prev">← vorige</button>
+      <div class="spacer"></div>
+      <button class="small ghost" id="p-next" data-i18n="next">volgende →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Grote kaart, als je die opvraagt ───────────────────────────────────── -->
+<div class="overlay hidden" id="allekaart">
+  <div class="grotekaartbox">
+    <div class="playerhead">
+      <div class="playertitle" data-i18n="all_locations">Alle bekende locaties</div>
+      <span class="pill" id="kaart-telling"></span>
+      <div class="spacer"></div>
+      <input type="date" id="k-van" title="van" data-i18n-title="from">
+      <input type="date" id="k-tot" title="tot" data-i18n-title="to">
+      <button class="small ghost" id="k-alles" data-i18n="all">Alles</button>
+      <button class="small ghost" id="btn-kaartdicht" data-i18n="close">Sluiten</button>
+    </div>
+    <div id="kaart" class="grotekaart"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="instellingen">
+  <div class="grotekaartbox instelbox">
+    <div class="playerhead">
+      <div class="playertitle" data-i18n="settings">Instellingen</div>
+      <div class="spacer"></div>
+      <button class="small ghost" id="btn-insteldicht" data-i18n="close">Sluiten</button>
+    </div>
+
+    <div class="instelbody">
+      <label class="instelveld">
+        <span data-i18n="folder_label">Map met je dashcam-bestanden</span>
+        <input type="text" id="set-root" spellcheck="false" placeholder="/Volumes/MY_STICK">
+        <small data-i18n="folder_hint">Onderliggende mappen worden vanzelf meegenomen. Een jaar-maand indeling is niet nodig.</small>
+      </label>
+
+      <div class="instelrij">
+        <label class="instelveld">
+          <span data-i18n="folder_normal">Submap gewone opnames</span>
+          <input type="text" id="set-normaal" spellcheck="false" placeholder="XP_DCIM">
+        </label>
+        <label class="instelveld">
+          <span data-i18n="folder_emergency">Submap noodopnames</span>
+          <input type="text" id="set-nood" spellcheck="false" placeholder="XP_EMER_DCIM">
+        </label>
+      </div>
+      <small class="instelnoot" data-i18n="folder_flat">Staan je bestanden niet in submappen? Laat deze twee leeg. De app doorzoekt dan de hoofdmap zelf.</small>
+
+      <div class="instelrij">
+        <label class="instelveld">
+          <span data-i18n="timezone">Tijdzone</span>
+          <input type="text" id="set-tz" spellcheck="false" placeholder="Europe/Amsterdam">
+          <small data-i18n="timezone_hint">De tijd komt uit de bestandsnaam. Zonder de juiste tijdzone kloppen alle tijden niet.</small>
+        </label>
+        <label class="instelveld">
+          <span data-i18n="primary_view">Hoofdcamera</span>
+          <input type="text" id="set-view" spellcheck="false" placeholder="front">
+          <small data-i18n="primary_view_hint">Het woord achter de tijd in de bestandsnaam, bijvoorbeeld front.</small>
+        </label>
+      </div>
+
+      <div class="instelknoppen">
+        <button class="small ghost" id="btn-instelcheck" data-i18n="test">Map testen</button>
+        <button class="small" id="btn-instelbewaar" data-i18n="save">Bewaren</button>
+        <span class="instelmelding" id="set-melding"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/leaflet.js"></script>
+<script src="app.js?v=32"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>local.xpeng-reminder</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/PATH/TO/xpeng-dashcam-viewer/.venv/bin/python</string>
+    <string>/PATH/TO/xpeng-dashcam-viewer/herinnering.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/PATH/TO/xpeng-dashcam-viewer</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>10</integer>
+    <key>Minute</key><integer>15</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/tmp/xpeng-reminder.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/xpeng-reminder.log</string>
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>
