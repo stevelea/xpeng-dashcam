@@ -63,6 +63,12 @@ integrated from 1 Hz CAN data, energy, consumption — are the car's own measure
 drive. The dashcam measured the same drive a different way: it reads the speed digits off
 the video. Showing both is a cross-check neither source can do alone.
 
+![A trip with the car's own record underneath](docs/Evconduit-Trip_Integration.png)
+
+*A matched drive: the car's numbers below, the video's beside them. The clock difference
+is shown rather than hidden, and the video's distance is empty here because the speed bar
+on this trip's footage could not be read.*
+
 To switch it on: **Settings → EVConduit address + API key**, then *Test connection*. The
 key is a per-account EVConduit API key; it is stored on your own server in `config.json`
 and is never sent back to the browser.
