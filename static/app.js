@@ -578,23 +578,36 @@ document.addEventListener('keydown', ev => {
 });
 
 /* ── Zoeken op tijd ────────────────────────────────────────────────────────── */
-$('#btn-search').onclick = async () => {
-  const datum = $('#s-date').value, tijd = $('#s-time').value || '12:00';
+// Venster in minuten waarbinnen rond een tijdstip wordt gezocht.
+const ZOEK_VENSTER = 30;
+
+// Gedeeld door de zoekknop en door een deeplink zoals
+//   ?dag=2026-07-02&tijd=17:35
+// zodat een andere app (bijvoorbeeld een rittenoverzicht) naar het juiste
+// moment kan linken.
+async function zoekOpTijd(datum, tijd, venster = ZOEK_VENSTER) {
   if (!datum) { $('#searchinfo').textContent = t('pick_date_first'); return; }
+  $('#s-date').value = datum;
+  if (tijd) $('#s-time').value = tijd;
   $('#searchinfo').textContent = t('searching');
   try {
-    const r = await api(`api/search?ts=${datum}T${tijd}&window_min=30`);
+    const r = await api(`api/search?ts=${datum}T${tijd || '12:00'}&window_min=${venster}`);
     $('#searchinfo').textContent = r.moments.length
       ? t('clips_found', { n: r.moments.length })
       : t('nothing_then');
     ritSluiten();
-    $('#dagtitel').textContent = t('around', { date: datum, time: tijd });
+    $('#dagtitel').textContent = t('around', { date: datum, time: tijd || '12:00' });
     $('#dagtelling').textContent = '';
     $('#dagritten').innerHTML = '';
     $('#beeldenkop').textContent = t('found_footage');
     $('#beeldentelling').textContent = t('clips_n', { n: r.moments.length });
     rasterTekenen(r.moments, true);
   } catch (e) { $('#searchinfo').textContent = t('error_n', { e: e.message }); }
+}
+
+$('#btn-search').onclick = () => {
+  const datum = $('#s-date').value, tijd = $('#s-time').value || '12:00';
+  return zoekOpTijd(datum, tijd);
 };
 
 /* ── Noodopnames ───────────────────────────────────────────────────────────── */
@@ -707,8 +720,22 @@ async function overzichtLaden() {
   const q = new URLSearchParams(location.search);
   const dag = q.get('dag') || o.days[0]?.day;
   const rit = q.get('rit');
+  // Deeplink naar een moment, bijvoorbeeld vanuit een rittenoverzicht:
+  //   ?dag=2026-07-02&tijd=17:35          (standaard 30 minuten ervoor/erna)
+  //   ?dag=2026-07-02&tijd=17:35&venster=90
+  const tijd = q.get('tijd') || q.get('time');
+  const venster = +(q.get('venster') || q.get('window') || ZOEK_VENSTER);
 
-  if (dag) {
+  // Vul het zoekformulier eerst, zodat een deeplink daarop voortbouwt.
+  $('#s-date').value = o.last_day || '';
+  $('#s-date').min = o.first_day || '';
+  $('#s-date').max = o.last_day || '';
+
+  if (tijd) {
+    // Zoeken kan op zichzelf staan; de dag wordt er toch bij gezocht.
+    if (dag) maandTonen(+dag.slice(0, 4), +dag.slice(5, 7) - 1);
+    await zoekOpTijd(dag, tijd, Number.isFinite(venster) && venster > 0 ? venster : ZOEK_VENSTER);
+  } else if (dag) {
     maandTonen(+dag.slice(0, 4), +dag.slice(5, 7) - 1);
     await dagKiezen(dag);
   }
@@ -719,9 +746,6 @@ async function overzichtLaden() {
       await ritOpenen(+rit, false);
     } catch { $('#subtitle').textContent = t('trip_missing', { n: rit }); }
   }
-  $('#s-date').value = o.last_day || '';
-  $('#s-date').min = o.first_day || '';
-  $('#s-date').max = o.last_day || '';
 }
 
 /* ── Instellingen ───────────────────────────────────────────────────────────
