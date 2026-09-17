@@ -1,0 +1,13 @@
+# Settings for /usr/local/bin/copyusb.sh
+# COPY_MODE="all" copies everything; "videos" restricts to VIDEO_EXT below.
+COPY_MODE="all"
+VIDEO_EXT="mp4 mov avi mkv ts m4v 3gp lrv insv"
+NAS_WAIT_SECONDS="300"
+MOUNTPOINT="/mnt/nas/xpg006camera"
+DEST_SUBDIR="xpg006camera"
+MQTT_ENABLED="1"
+MQTT_HOST="192.168.1.88"
+MQTT_PORT="1883"
+MQTT_USER="mqtt"
+MQTT_PASS=""
+MQTT_PREFIX="xpg006camera"
