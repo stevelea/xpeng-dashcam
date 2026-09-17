@@ -1,10 +1,9 @@
 # EVConduit trip data in XPENG Dashcam Viewer — what exists, and the one thing we need
 
-Written for whoever maintains EVConduit (`/Volumes/projects/evconduit`). The
-consumer is a separate, self-hosted app: **XPENG Dashcam Viewer**
-(`/Volumes/projects/XpengDVRCopy`), a small FastAPI + SQLite app that indexes
-XPENG dashcam `.mp4` files, groups them into trips, draws thumbnails and reads
-the speed digits off the video.
+Written for whoever maintains EVConduit. The consumer is a separate,
+self-hosted app: **XPENG Dashcam Viewer** (this repository), a small FastAPI +
+SQLite app that indexes XPENG dashcam `.mp4` files, groups them into trips,
+draws thumbnails and reads the speed digits off the video.
 
 The ask is small: we want to show the car's own figures for a drive next to the
 footage of it, and draw the GPS track if there is one. Almost all of it already
