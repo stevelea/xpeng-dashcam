@@ -26,3 +26,4 @@ nas-scripts/
 
 # Live deployment snapshots: contain real broker/share credentials.
 deploy/live/
+.aside/
