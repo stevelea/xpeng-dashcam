@@ -5,10 +5,10 @@ instance — can link straight to the clips for a moment instead of dropping the
 user on a calendar. Nothing is needed on the viewer side beyond the link: no API
 key, no registration.
 
-Base URL, as deployed in this household:
+The viewer's own address, wherever it runs:
 
 ```
-http://192.168.1.109:8965/
+http://viewer.local:8965/
 ```
 
 ## Parameters
@@ -40,7 +40,7 @@ the duration:
 
 ```
 start 17:26, end 17:41  →  centre 17:33, half-width 12
-http://192.168.1.109:8965/?dag=2026-07-02&tijd=17:33&venster=12
+http://viewer.local:8965/?dag=2026-07-02&tijd=17:33&venster=12
 ```
 
 Passing the start time with the default 30-minute window is usually good enough
@@ -50,22 +50,22 @@ and simpler — you get the trip plus half an hour either side.
 
 ```
 # whole day
-http://192.168.1.109:8965/?dag=2026-07-02
+http://viewer.local:8965/?dag=2026-07-02
 
 # 30 minutes either side of a moment
-http://192.168.1.109:8965/?dag=2026-07-02&tijd=17:33
+http://viewer.local:8965/?dag=2026-07-02&tijd=17:33
 
 # tight: 5 minutes either side
-http://192.168.1.109:8965/?dag=2026-07-02&tijd=17:33&venster=5
+http://viewer.local:8965/?dag=2026-07-02&tijd=17:33&venster=5
 
 # wide
-http://192.168.1.109:8965/?dag=2026-07-02&tijd=17:33&venster=180
+http://viewer.local:8965/?dag=2026-07-02&tijd=17:33&venster=180
 
 # open a trip directly, by id
-http://192.168.1.109:8965/?dag=2026-07-02&rit=4
+http://viewer.local:8965/?dag=2026-07-02&rit=4
 
 # seconds are accepted
-http://192.168.1.109:8965/?dag=2026-07-02&tijd=17:26:58
+http://viewer.local:8965/?dag=2026-07-02&tijd=17:26:58
 ```
 
 A colon may be sent literally or percent-encoded (`17%3A33`); both work.
@@ -86,7 +86,7 @@ DVR_20260702172658840_front.mp4
 ```js
 const pad = n => String(n).padStart(2, '0');
 
-function linkForClip(fileName, baseUrl = 'http://192.168.1.109:8965/') {
+function linkForClip(fileName, baseUrl = 'http://viewer.local:8965/') {
   const m = /(\d{14})/.exec(fileName);
   if (!m) return null;
   const s = m[1];                       // YYYYMMDDHHMMSS from the file name
@@ -94,7 +94,7 @@ function linkForClip(fileName, baseUrl = 'http://192.168.1.109:8965/') {
          `&tijd=${s.slice(8, 10)}:${s.slice(10, 12)}:${s.slice(12, 14)}&venster=15`;
 }
 
-function linkForTrip(start, end, baseUrl = 'http://192.168.1.109:8965/') {
+function linkForTrip(start, end, baseUrl = 'http://viewer.local:8965/') {
   const mins = s => { const [h, m] = s.slice(11, 16).split(':').map(Number); return h * 60 + m; };
   const hhmm = t => `${pad(Math.floor(t / 60) % 24)}:${pad(t % 60)}`;
   const a = mins(start), b = mins(end);
@@ -115,14 +115,14 @@ function linkForTrip(start, end, baseUrl = 'http://192.168.1.109:8965/') {
 import re
 from datetime import datetime
 
-def link_for_clip(file_name, base="http://192.168.1.109:8965/"):
+def link_for_clip(file_name, base="http://viewer.local:8965/"):
     m = re.search(r"(\d{14})", file_name)
     if not m:
         return None
     t = datetime.strptime(m.group(1), "%Y%m%d%H%M%S")
     return f"{base}?dag={t:%Y-%m-%d}&tijd={t:%H:%M:%S}&venster=15"
 
-def link_for_trip(start: datetime, end: datetime, base="http://192.168.1.109:8965/"):
+def link_for_trip(start: datetime, end: datetime, base="http://viewer.local:8965/"):
     mid = start + (end - start) / 2
     half = max(5, int((end - start).total_seconds() / 120) + 5)
     return f"{base}?dag={mid:%Y-%m-%d}&tijd={mid:%H:%M}&venster={half}"
