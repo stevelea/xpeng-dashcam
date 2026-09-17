@@ -132,25 +132,40 @@ Both produce the same links as the JavaScript versions.
 
 ## Time zone — please read this one
 
-`tijd` is **wall-clock time in the viewer's configured time zone**
-(`config.json` → `timezone`), not UTC. Pass the time as it appears on the
-footage, and do not convert it.
+`tijd` is **wall-clock time**, not UTC. It is read in the time zone configured in
+the viewer's own settings, so pass the time exactly as it appears on the footage
+and do not convert it.
 
-In particular, **do not build these strings with `new Date()`** if your server
-may run in a different time zone from the car, or the result shifts:
+The time zone is a **per-installation setting**, chosen by whoever runs the
+viewer (Settings → Time zone). It should be the zone the car was recording in,
+which is not necessarily where the viewer runs. Read it back rather than
+assuming it:
+
+```
+GET /api/settings      →  { "timezone": "<the zone the car records in>", ... }
+```
+
+In particular, **do not build these strings with `new Date()`**, or the result
+depends on the time zone of the machine generating the link rather than the
+car's:
 
 ```js
-// WRONG on a UTC server - this is 15:33 UTC, which the viewer reads as 15:33 local
+// WRONG on a server in a different zone - this yields that machine's local
+// midpoint, which the viewer then reads as if it were the car's local time.
 const mid = new Date((new Date(start) + new Date(end)) / 2);
 ```
 
-The helper functions above avoid `Date` arithmetic for exactly this reason:
-they slice the wall-clock text you already have and never reinterpret it. If the
-link lands on the wrong moment, a time-zone mismatch is the first thing to check.
+The helper functions above avoid `Date` arithmetic for exactly this reason: they
+slice the wall-clock text you already have and never reinterpret it. If a link
+lands on the wrong moment, a time-zone mismatch is the first thing to check.
 
-The current viewer time zone is `Europe/Berlin`. If you need it to be something
-else, it is one setting on the viewer — tell me and I will change it, since
-existing timestamps keep the offset they were first parsed with.
+### Changing the time zone does not re-date existing clips
+
+Timestamps are written into the index when a clip is first scanned, using
+whatever zone was configured at that moment. Changing the setting afterwards
+affects newly indexed clips only; already-indexed ones keep their original
+offset. If the zone was wrong from the start, the fix is to re-index
+(`scan.py` then `ritten.py`) after correcting it.
 
 ## Clip layout and timing
 
