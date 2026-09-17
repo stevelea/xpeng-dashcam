@@ -85,6 +85,9 @@ html[data-theme="dark"] .kaldag.opname { color: #5cc163; }
 .dagrit .tijd { font-variant-numeric: tabular-nums; }
 .dagrit .km { color: var(--gold-soft); font-weight: 600; }
 .dagrit .km.onbekend { color: var(--muted); font-weight: 500; }
+/* De afstand van de auto in plaats van die van ons. Schuin en een eigen kleur, want
+   het is een andere meter dan de onze — zie de hover voor waar hij vandaan komt. */
+.dagrit .km.auto { color: #5aa9e6; font-style: italic; }
 .dagrit .duur { color: var(--muted); font-size: .78rem; }
 .dagrit .lijn { width: 13px; height: 0; border-top: 3px solid var(--ok); flex-shrink: 0; }
 .dagrit .lijn.gereconstrueerd { border-top-style: dashed; border-top-color: var(--gold-soft); }

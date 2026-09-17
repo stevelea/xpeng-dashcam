@@ -22,6 +22,10 @@ Twee dingen die dit bestand expres NIET doet:
   verschil tussen die twee is het interessantste dat deze functie oplevert.
 * **Een rit die alleen op de marge past wordt niet als "gevonden" gepresenteerd.**
   Dat heet hier `twijfel` en het wordt ook zo teruggegeven.
+
+Instellingen worden als parameter doorgegeven en niet in een globale variabele
+gezet: de testknop en een gewone rit kunnen elkaar anders in de wielen rijden, en
+dan zie je met de ene sleutel de ritten van de andere.
 """
 import json
 import sys
@@ -50,30 +54,18 @@ class Fout(Exception):
 
 
 # ── Instellingen ──────────────────────────────────────────────────────────────
-# Zodat de testknop kan proberen wat er in het formulier staat voordat het bewaard
-# is. Zonder dit moet je eerst een verkeerde sleutel opslaan om te ontdekken dat
-# hij verkeerd is.
-_tijdelijk = {}
+def instellingen(overschrijf=None):
+    """De instellingen, met eventueel een tijdelijke afwijking eroverheen.
 
-
-def tijdelijk(url=None, sleutel=None, marge_s=None):
-    global _tijdelijk
-    _tijdelijk = {'url': url or None, 'sleutel': sleutel or None, 'marge_s': marge_s}
-
-
-def wis_tijdelijk():
-    global _tijdelijk
-    _tijdelijk = {}
-
-
-def instellingen():
+    `overschrijf` is er voor de testknop, die moet kunnen proberen wat er in het
+    formulier staat voordat het bewaard is. Het is expres een parameter en geen
+    global: anders zou een test met een andere sleutel tegelijk ook de ritten van
+    een ander verzoek kunnen beantwoorden.
+    """
     cfg = dict(store.load_config().get('evconduit') or {})
-    if _tijdelijk.get('url'):
-        cfg['url'] = _tijdelijk['url']
-    if _tijdelijk.get('sleutel'):
-        cfg['sleutel'] = _tijdelijk['sleutel']
-    if _tijdelijk.get('marge_s') is not None:
-        cfg['marge_s'] = _tijdelijk['marge_s']
+    for sleutel, waarde in (overschrijf or {}).items():
+        if waarde:
+            cfg[sleutel] = waarde
     basis = (cfg.get('url') or '').strip().rstrip('/')
     sleutel = (cfg.get('sleutel') or '').strip()
     try:
@@ -84,9 +76,9 @@ def instellingen():
             'aan': bool(cfg.get('aan', True))}
 
 
-def _basis():
+def _basis(overschrijf=None):
     """Het adres van de API. Accepteert .../ zowel als .../api als beginpunt."""
-    cfg = instellingen()
+    cfg = instellingen(overschrijf)
     if not cfg['url'] or not cfg['sleutel']:
         raise Fout('EVConduit is niet ingesteld')
     basis = cfg['url']
@@ -95,54 +87,59 @@ def _basis():
     return basis, cfg['sleutel']
 
 
-def _kop():
-    basis, sleutel = _basis()
+def _kop(overschrijf=None):
+    basis, sleutel = _basis(overschrijf)
     return basis, {'Authorization': f'Bearer {sleutel}',
                    'Accept': 'application/json',
                    'User-Agent': 'xpeng-dashcam/1.0'}
 
 
-def ingesteld():
-    cfg = instellingen()
+def ingesteld(overschrijf=None):
+    cfg = instellingen(overschrijf)
     return bool(cfg['aan'] and cfg['url'] and cfg['sleutel'])
 
 
 # ── Tijd ──────────────────────────────────────────────────────────────────────
-def _utc(waarde):
-    """Een tijdstip van EVConduit naar UTC. 'Z' komt voor, leeg ook."""
+def _tijdstip(waarde):
+    """Een tijdstip uit de index of van EVConduit, met of zonder zone, of None."""
     if not waarde:
         return None
     try:
-        d = datetime.fromisoformat(str(waarde).replace('Z', '+00:00'))
+        # EVConduit stuurt soms 'Z' in plaats van '+00:00'. fromisoformat kent die
+        # pas vanaf Python 3.11, dus we schrijven hem zelf om — anders zou dit op
+        # een oudere Python stil None worden en heette elke rit "niet gevonden".
+        return datetime.fromisoformat(str(waarde).replace('Z', '+00:00').replace(' ', 'T'))
     except ValueError:
+        return None
+
+
+def _utc(waarde):
+    """Een tijdstip van EVConduit naar UTC. 'Z' komt voor, leeg ook."""
+    d = _tijdstip(waarde)
+    if d is None:
         return None
     if d.tzinfo is None:
         d = d.replace(tzinfo=timezone.utc)
     return d.astimezone(timezone.utc)
 
 
-def _naief(waarde):
-    """Een tijdstip zonder zone, of None als het geen tijdstip is."""
-    try:
-        d = datetime.fromisoformat(str(waarde).replace(' ', 'T'))
-    except ValueError:
-        return None
-    return d.replace(tzinfo=None)
-
-
 def _ons_venster(trip):
     """De rit van de dashcam als UTC-venster.
 
-    Onze tijd is lokale tijd zonder zone — de bestandsnaam zegt niets over zones —
-    dus de zone uit config.json bepaalt wat het in UTC is. Per aanroep opzoeken,
+    De index bewaart onze tijd mét zone (ritten.py schrijft hem erbij), dus dan
+    gebruiken we die. Staat er geen zone — een oude index of een zelfgemaakte
+    regel — dan is de zone uit config.json de bedoeling. Per aanroep opzoeken,
     zodat een gewijzigde tijdzone meteen geldt en niet pas na een herstart.
     """
     tz = store.tijdzone()
-    start, eind = _naief(trip['start_ts']), _naief(trip['end_ts'])
+    start, eind = _tijdstip(trip['start_ts']), _tijdstip(trip['end_ts'])
     if start is None or eind is None:
         return None
-    return (start.replace(tzinfo=tz).astimezone(timezone.utc),
-            eind.replace(tzinfo=tz).astimezone(timezone.utc))
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=tz)
+    if eind.tzinfo is None:
+        eind = eind.replace(tzinfo=tz)
+    return start.astimezone(timezone.utc), eind.astimezone(timezone.utc)
 
 
 # ── Ophalen ───────────────────────────────────────────────────────────────────
@@ -163,17 +160,21 @@ def _haal(basis, kop, pad, params=None):
         raise Fout('EVConduit gaf geen leesbaar antwoord')
 
 
-def ritten():
+def ritten(overschrijf=None):
     """Alle ritten die EVConduit voor deze gebruiker heeft, nieuwste eerst."""
-    basis, kop = _kop()
+    basis, kop = _kop(overschrijf)
     d = _haal(basis, kop, '/user/xpeng/trips')
     return (d or {}).get('trips') or []
 
 
-def toets():
-    """Voor de instellingenpagina: werken het adres en de sleutel?"""
+def toets(url='', sleutel=''):
+    """Voor de instellingenpagina: werken het adres en de sleutel?
+
+    Probeert wat er in het formulier staat; is dat leeg, dan het bewaarde.
+    """
+    overschrijf = {'url': url, 'sleutel': sleutel}
     try:
-        rijen = ritten()
+        rijen = ritten(overschrijf)
     except Fout as exc:
         return {'ok': False, 'reden': str(exc)}
     if not rijen:
@@ -233,14 +234,14 @@ def _dun(rij):
     return {k: rij.get(k) for k in _VELDEN}
 
 
-def _spoor(xpeng_id, marge_s):
+def _spoor(xpeng_id, marge_s, overschrijf=None):
     """Het gereden spoor bij deze rit, als er een logger naar EVConduit post.
 
     EVConduit antwoordt altijd met `available`, want "geen spoor" is de gewone
     toestand voor iemand zonder logger. De reden reist mee, zodat wij kunnen zeggen
     wat er aan de hand is in plaats van een leeg vak te tonen.
     """
-    basis, kop = _kop()
+    basis, kop = _kop(overschrijf)
     d = _haal(basis, kop, f'/user/xpeng/trips/{xpeng_id}/track',
               {'max_points': MAX_PUNTEN, 'pad_seconds': marge_s})
     if not d:
@@ -266,79 +267,16 @@ def _spoor(xpeng_id, marge_s):
     }
 
 
-# ── Het antwoord dat de app gebruikt ──────────────────────────────────────────
+# ── Bewaren en terughalen ─────────────────────────────────────────────────────
 def _leeg(reden, **extra):
     return {'beschikbaar': False, 'reden': reden, 'rit': None, 'spoor': None,
             'kandidaten': [], **extra}
 
 
-def koppel(con, trip, forceer=False):
-    """Zoek de rit van de auto bij deze dashcam-rit, en bewaar wat we vinden.
-
-    De sleutel in de cache is onze eigen `start_ts`. Opnieuw ophalen kan altijd met
-    forceer=True; standaard gebruiken we wat er staat, want een rit van gisteren
-    verandert niet meer en EVConduit is een externe dienst.
-    """
-    start_ts = trip['start_ts']
-
-    # Uitgeschakeld is uit, ook voor wat al bewaard is. Anders doet de schakelaar in
-    # de instellingen niet wat erop staat.
-    if not instellingen()['aan']:
-        return _leeg('geen_evconduit')
-
-    # De cache gaat vóór de vraag of het ingesteld is. Een adres tijdelijk weghalen
-    # of een sleutel intypen mag de gegevens van gisteren niet van het scherm halen:
-    # die zijn al opgehaald en blijven een eigenschap van de rit.
-    if not forceer:
-        rij = con.execute('SELECT * FROM xpeng_ritten WHERE start_ts = ?', (start_ts,)).fetchone()
-        if rij:
-            return _uit_cache(rij)
-
-    if not ingesteld():
-        return _leeg('geen_evconduit')
-
-    try:
-        rijen = ritten()
-    except Fout as exc:
-        return _leeg('onbereikbaar', melding=str(exc))
-
-    ons = _ons_venster(trip)
-    if ons is None:
-        return _leeg('geen_tijd')
-
-    marge_s = instellingen()['marge_s']
-    kandidaten = _kandidaten(ons, rijen, marge_s)
-    if not kandidaten:
-        _bewaar(con, start_ts, None, None, None, None, marge_s, 0, None)
-        return _leeg('geen_rit')
-
-    beste = kandidaten[0]
-    dubbel = [k for k in kandidaten[1:] if k['dekking'] >= DUBBEL_VANAF]
-    twijfel = int(beste['dekking'] < ZEKER_VANAF)
-    afwijking = {'start_s': beste['start_afwijking_s'], 'eind_s': beste['eind_afwijking_s']}
-
-    spoor = None
-    if beste['dekking'] >= ZEKER_VANAF:
-        try:
-            spoor = _spoor(beste['rit']['id'], marge_s)
-        except Fout as exc:
-            # De rit is gevonden, alleen het spoor lukte niet. Dat is geen reden om
-            # de gegevens van de auto zelf weg te gooien.
-            spoor = {'beschikbaar': False, 'reden': 'onbereikbaar', 'melding': str(exc),
-                     'geojson': None, 'punten': 0, 'punten_bron': 0, 'dekking': None,
-                     'gedekt_s': None, 'rit_s': None, 'grootste_gat_s': None,
-                     'spoor_km': None, 'venster': None}
-
-    _bewaar(con, start_ts, beste['rit'], spoor, beste['dekking'], dubbel, marge_s, twijfel,
-            afwijking)
-
-    return _uit_cache(con.execute('SELECT * FROM xpeng_ritten WHERE start_ts = ?',
-                                  (start_ts,)).fetchone())
-
-
-def _bewaar(con, start_ts, rit, spoor, dekking, dubbel, marge_s, twijfel, afwijking):
-    inhoud = json.dumps({'spoor': spoor, 'dubbel': dubbel or [],
-                         'afwijking': afwijking}) if (spoor or dubbel or afwijking) else None
+def _bewaar(con, start_ts, rit, spoor, dekking, dubbel, marge_s, twijfel, afwijking,
+            spoor_opgehaald):
+    inhoud = json.dumps({'spoor': spoor, 'dubbel': dubbel or [], 'afwijking': afwijking,
+                         'spoor_opgehaald': bool(spoor_opgehaald)})
     con.execute(
         'INSERT OR REPLACE INTO xpeng_ritten '
         '(start_ts, xpeng_id, vin, rit, spoor, dekking, marge_s, twijfel, opgehaald) '
@@ -373,6 +311,133 @@ def _uit_cache(rij):
     return {'beschikbaar': True, 'reden': None, 'rit': rit, 'spoor': spoor,
             'kandidaten': dubbel, 'dekking': rij['dekking'], 'afwijking': afwijking,
             'marge_s': rij['marge_s'], 'opgehaald': rij['opgehaald']}
+
+
+def _compleet(rij, met_spoor):
+    """Is wat er in de cache staat genoeg voor wat de aanroeper wil?
+
+    Zonder spoor is de opslag altijd genoeg — de ritttegels hebben alleen de
+    afstand nodig en een spoor kost een verzoek per rit. Met spoor moet het ook
+    echt geprobeerd zijn, anders zou een rit die eerst voor de tegel is opgehaald
+    daarna voor altijd "geen spoor" blijven tonen.
+    """
+    if not met_spoor:
+        return True
+    if rij['twijfel'] or not rij['rit']:
+        return True
+    bewaard = json.loads(rij['spoor']) if rij['spoor'] else {}
+    return bool(bewaard.get('spoor_opgehaald'))
+
+
+def _koppel_een(con, trip, rijen, marge_s, met_spoor):
+    start_ts = trip['start_ts']
+    ons = _ons_venster(trip)
+    if ons is None:
+        return _leeg('geen_tijd')
+
+    kandidaten = _kandidaten(ons, rijen, marge_s)
+    if not kandidaten:
+        _bewaar(con, start_ts, None, None, None, None, marge_s, 0, None, True)
+        return _leeg('geen_rit')
+
+    beste = kandidaten[0]
+    dubbel = [k for k in kandidaten[1:] if k['dekking'] >= DUBBEL_VANAF]
+    twijfel = int(beste['dekking'] < ZEKER_VANAF)
+    afwijking = {'start_s': beste['start_afwijking_s'], 'eind_s': beste['eind_afwijking_s']}
+
+    spoor = None
+    spoor_opgehaald = True
+    if twijfel:
+        pass
+    elif not met_spoor:
+        spoor_opgehaald = False
+    else:
+        try:
+            spoor = _spoor(beste['rit']['id'], marge_s)
+        except Fout as exc:
+            # De rit is gevonden, alleen het spoor lukte niet. Dat is geen reden om
+            # de gegevens van de auto zelf weg te gooien. Niet bewaard als
+            # "opgehaald", zodat een volgende poging het opnieuw probeert.
+            spoor_opgehaald = False
+            spoor = {'beschikbaar': False, 'reden': 'onbereikbaar', 'melding': str(exc),
+                     'geojson': None, 'punten': 0, 'punten_bron': 0, 'dekking': None,
+                     'gedekt_s': None, 'rit_s': None, 'grootste_gat_s': None,
+                     'spoor_km': None, 'venster': None}
+
+    _bewaar(con, start_ts, beste['rit'], spoor, beste['dekking'], dubbel, marge_s, twijfel,
+            afwijking, spoor_opgehaald)
+    return _uit_cache(con.execute('SELECT * FROM xpeng_ritten WHERE start_ts = ?',
+                                  (start_ts,)).fetchone())
+
+
+def koppel_veel(con, trips, forceer=False, met_spoor=True):
+    """Koppel een hele reeks ritten in één keer.
+
+    De rittenlijst van EVConduit wordt ÉÉN keer opgehaald en daarna tegen alle
+    ritten gehouden. Per rit ophalen zou bij een dag met vijf ritten vijf keer
+    hetzelfde verzoek doen, en dat is traag genoeg om te merken.
+    """
+    trips = list(trips)
+    uit = {}
+    if not trips:
+        return uit
+    if not instellingen()['aan']:
+        return {t['start_ts']: _leeg('geen_evconduit') for t in trips}
+
+    te_doen = []
+    for t in trips:
+        start_ts = t['start_ts']
+        rij = None if forceer else con.execute(
+            'SELECT * FROM xpeng_ritten WHERE start_ts = ?', (start_ts,)).fetchone()
+        if rij is not None and _compleet(rij, met_spoor):
+            uit[start_ts] = _uit_cache(rij)
+        else:
+            te_doen.append(t)
+
+    if not te_doen:
+        return uit
+
+    if not ingesteld():
+        for t in te_doen:
+            uit[t['start_ts']] = _leeg('geen_evconduit')
+        return uit
+
+    try:
+        rijen = ritten()
+    except Fout as exc:
+        for t in te_doen:
+            uit[t['start_ts']] = _leeg('onbereikbaar', melding=str(exc))
+        return uit
+
+    marge_s = instellingen()['marge_s']
+    for t in te_doen:
+        uit[t['start_ts']] = _koppel_een(con, t, rijen, marge_s, met_spoor)
+    return uit
+
+
+def koppel(con, trip, forceer=False):
+    """Eén rit. Zie koppel_veel; dit is dezelfde weg met één rit erin."""
+    return koppel_veel(con, [trip], forceer=forceer)[trip['start_ts']]
+
+
+def dag_auto(con, trips):
+    """Alleen de afstand per rit, voor de ritttegels onder de kalender.
+
+    Zonder spoor: dat is een verzoek per rit en een tegel heeft er niets aan. De
+    sleutel is ons eigen ritnummer, want dat is wat de pagina heeft.
+    """
+    gekoppeld = koppel_veel(con, trips, met_spoor=False)
+    uit = {}
+    for t in trips:
+        d = gekoppeld.get(t['start_ts']) or _leeg('geen_rit')
+        rit = d.get('rit') or {}
+        km = rit.get('distance_km')
+        uit[str(t['id'])] = {
+            'km': None if km is None else round(float(km), 1),
+            'zeker': bool(d.get('beschikbaar')),
+            'dekking': d.get('dekking'),
+        }
+    return uit
 
 
 def status(con):

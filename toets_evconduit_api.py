@@ -165,6 +165,38 @@ r = cli.get('/api/evconduit/toets?sleutel=lekkage')
 check('toets is geen GET: sleutel in de query string werkt niet',
       r.status_code != 200, r.status_code)
 
+# ── 11. De ritttegels: de afstand van de auto per rit ────────────────────────
+r = cli.get('/api/trips/2026-09-14/auto')
+d = r.json()
+check('dag-eindpunt antwoordt', r.status_code == 200 and d['day'] == '2026-09-14', r.status_code)
+check('sleutelt op ons eigen ritnummer', str(trip_id) in d['auto'], list(d['auto']))
+check('geeft de afstand van de auto', d['auto'][str(trip_id)]['km'] == 14.1, d['auto'])
+check('en of de koppeling zeker is', d['auto'][str(trip_id)]['zeker'] is True)
+check('een dag zonder ritten geeft een leeg overzicht',
+      cli.get('/api/trips/2020-01-01/auto').json()['auto'] == {})
+
+# ── 12. Een onbereikbaar EVConduit mag de dag niet breken ────────────────────
+def nep_stuk(url, params=None, headers=None, timeout=None):
+    raise RuntimeError('netwerk stuk')
+
+
+bewaard = evconduit.httpx.get
+evconduit.httpx.get = nep_stuk
+try:
+    evconduit.vergeet(con)                     # anders antwoordt de cache
+    r = cli.get('/api/trips/2026-09-14/auto')
+    d = r.json()
+    check('onbereikbaar geeft nog steeds 200', r.status_code == 200, r.status_code)
+    check('en geen afstand in plaats van een fout',
+          d['auto'].get(str(trip_id), {}).get('km') is None, d['auto'].get(str(trip_id)))
+    # De rittitellijst zelf mag hier niet door omvallen; dat is de kern van de dag.
+    check('de ritten van de dag komen er nog wel',
+          len(cli.get('/api/trips/2026-09-14').json()['trips']) == 1)
+    check('een rit openen meldt onbereikbaar, geen crash',
+          cli.get(f'/api/trip/{trip_id}/auto').json()['reden'] == 'onbereikbaar')
+finally:
+    evconduit.httpx.get = bewaard
+
 con.close()
 print()
 if fouten:

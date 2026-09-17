@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """XPENG dashcam-viewer: bladeren per dag, miniaturen, zoeken op tijd."""
 import json
+import logging
 import mimetypes
 import sys
 from datetime import datetime, timedelta
@@ -9,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+log = logging.getLogger('xpeng-dashcam')
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -224,6 +226,26 @@ def api_trips(day: str):
     return {'day': day, 'trips': out}
 
 
+@app.get('/api/trips/{day}/auto')
+def api_trips_auto(day: str):
+    """De afstand van de auto per rit van deze dag, voor de ritttegels.
+
+    Alleen voor ritten waar wij zelf nog geen kilometers hebben gemeten; de tegel
+    laat onze eigen meting staan als die er is. De rittenlijst van EVConduit wordt
+    hier één keer opgehaald en niet per rit — zie evconduit.koppel_veel.
+    """
+    con = store.connect()
+    rows = con.execute('SELECT * FROM trips WHERE day = ? ORDER BY start_ts', (day,)).fetchall()
+    try:
+        auto = evconduit_mod.dag_auto(con, [dict(r) for r in rows])
+    except Exception as exc:                 # een externe dienst mag de dag niet breken
+        auto = {}
+        log.warning('EVConduit-dagoverzicht mislukt: %s', exc)
+    finally:
+        con.close()
+    return {'day': day, 'auto': auto}
+
+
 @app.get('/api/trip/{trip_id}')
 def api_trip(trip_id: int):
     con = store.connect()
@@ -372,12 +394,8 @@ async def api_evconduit_toets(request: Request):
         binnen = {}
     if not isinstance(binnen, dict):
         binnen = {}
-    evconduit_mod.tijdelijk(url=(binnen.get('url') or '').strip(),
-                            sleutel=(binnen.get('sleutel') or '').strip())
-    try:
-        return evconduit_mod.toets()
-    finally:
-        evconduit_mod.wis_tijdelijk()
+    return evconduit_mod.toets(url=(binnen.get('url') or '').strip(),
+                               sleutel=(binnen.get('sleutel') or '').strip())
 
 
 @app.post('/api/evconduit/vergeet')

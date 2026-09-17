@@ -67,6 +67,10 @@ const TAALEN = {
   auto_clock: 'Clock difference',
   auto_clock_val: 'start {start}s, end {end}s against the video',
   auto_refresh: 'Refresh',
+  auto_looking: 'Looking for this drive in the car\u2019s data\u2026',
+  auto_error: 'Could not load the car\u2019s data.',
+  km_from_car: 'Distance from the car (EVConduit). The video has not been measured for this trip.',
+  km_from_car_unsure: 'Distance from the car (EVConduit), but the times only partly match. Treat with care.',
   auto_reason_geen_rit: 'No drive from the car matches this time.',
   auto_reason_twijfel: 'There is a drive that looks like this one, but the times differ too much to claim it.',
   auto_reason_geen_tijd: 'This trip has no usable start time.',
@@ -145,6 +149,10 @@ const TAALNL = {
   auto_clock: 'Klokverschil',
   auto_clock_val: 'begin {start} s, eind {end} s ten opzichte van het beeld',
   auto_refresh: 'Verversen',
+  auto_looking: 'Deze rit opzoeken in de gegevens van de auto\u2026',
+  auto_error: 'De gegevens van de auto konden niet geladen worden.',
+  km_from_car: 'Afstand van de auto (EVConduit). Van deze rit is het beeld nog niet gemeten.',
+  km_from_car_unsure: 'Afstand van de auto (EVConduit), maar de tijden komen maar deels overeen. Met voorzichtigheid.',
   auto_reason_geen_rit: 'Geen rit van de auto gevonden bij deze tijd.',
   auto_reason_twijfel: 'Er is een rit die erop lijkt, maar de tijden wijken te veel af om hem op te eisen.',
   auto_reason_geen_tijd: 'Deze rit heeft geen bruikbare begintijd.',
@@ -385,6 +393,33 @@ async function ritLijstTekenen(ritten) {
       <span class="duur">${rit.minutes} min · ${rit.clips} clips</span>
     </button>`).join('');
   $$('.dagrit', el).forEach(b => b.onclick = () => ritOpenen(+b.dataset.id));
+  kmBijvullen(state.dag, ritten);
+}
+
+/* Ritten waar wij zelf geen kilometers van hebben: vul ze met wat de auto zegt, als
+   EVConduit die rit kent. Nadrukkelijk herkenbaar — het is de meting van de auto en
+   niet die van ons, en dat verschil mag niet uit het scherm verdwijnen. Hebben we zelf
+   wel gemeten, dan blijft onze eigen meting staan; die twee naast elkaar zetten is
+   juist de bedoeling, maar dat gebeurt in het kader van de rit zelf. */
+async function kmBijvullen(dag, ritten) {
+  if (evStatusBezig) await evStatusBezig;     // bij een directe link kan dit nog lopen
+  if (!evActief || !dag || !ritten.length) return;
+  let d;
+  try { d = await api(`api/trips/${dag}/auto`); } catch { return; }
+  if (state.dag !== dag) return;               // de gebruiker is al naar een andere dag
+  const auto = d.auto || {};
+  $$('.dagrit').forEach(b => {
+    const rit = ritten.find(x => String(x.id) === b.dataset.id);
+    if (!rit || rit.km !== null) return;       // wij hebben zelf al gemeten
+    const a = auto[String(rit.id)];
+    if (!a || a.km === null || a.km === undefined) return;
+    const km = $('.km', b);
+    if (!km) return;
+    km.textContent = nf(a.km) + ' km';
+    km.classList.remove('onbekend');
+    km.classList.add('auto');
+    km.title = t(a.zeker ? 'km_from_car' : 'km_from_car_unsure');
+  });
 }
 
 /* ── Een rit ───────────────────────────────────────────────────────────────── */
@@ -394,6 +429,16 @@ let ritlaag = null;
 // route die wij zelf opbouwen, en de twee mogen elkaar niet overschrijven.
 let autolaag = null;
 let ritgrenzen = null;
+// Of EVConduit is ingesteld. Eén keer opgehaald bij het laden, zodat het autokader
+// meteen "zoeken…" kan tonen in plaats van pas na een paar seconden stilte.
+// Drie standen: null = nog niet bekend, true/false = wel. Onbekend telt als "zou
+// kunnen", want een directe link opent een rit voordat dit antwoord er is en dan is
+// een korte "zoeken…" beter dan een leeg vak dat blijft staan.
+let evActief = null;
+let evStatusBezig = null;
+// Welke rit het laatst is aangeklikt. Een antwoord dat bij een oudere rit hoort mag
+// het scherm niet overschrijven.
+let autoBeurt = 0;
 
 function ritSluiten() {
   state.rit = null;
@@ -415,16 +460,26 @@ async function ritOpenen(id, scrollen = true) {
   $('#beeldentelling').textContent = t('clips_n', { n: d.fragmenten.length });
 
   $$('.dagrit').forEach(b => b.classList.toggle('actief', +b.dataset.id === id));
-  rasterTekenen(d.fragmenten.map(f => ({ ...f, day: t.day })), false);
+  rasterTekenen(d.fragmenten.map(f => ({ ...f, day: rit.day })), false);
+
+  // Meteen zeggen dat we aan het zoeken zijn: het ophalen bij de auto duurt een
+  // paar seconden en een leeg vak in die tijd leest als "doet het niet".
+  autoWachten();
+
+  // Een eigen beurtnummer, zodat een langzame eerste rit het antwoord van een
+  // daarna aangeklikte tweede niet overschrijft.
+  const beurt = ++autoBeurt;
   // De twee oproepen lopen naast elkaar: de gegevens van de auto mogen niet op de
   // route wachten, en andersom. autoTekenen tekent daarna in de kaart die er dan staat.
   const [, auto] = await Promise.all([
-    ritRouteTekenen(id, t),
+    // Een mislukte route mag de gegevens van de auto niet tegenhouden: dan staat de
+    // kaart er zonder lijn, maar het autokader komt er wel.
+    ritRouteTekenen(id, rit).catch(() => {}),
     api(`api/trip/${id}/auto`).catch(() => null),
   ]);
-  autoTekenen(auto, t);
-  rasterTekenen(d.fragmenten.map(f => ({ ...f, day: rit.day })), false);
-  await ritRouteTekenen(id, rit);
+  if (beurt !== autoBeurt || state.rit !== id) return;   // een nieuwere rit is al open
+  autoTekenen(auto, rit);
+
   // alleen meebewegen als je zelf een rit aanklikt; bij een directe link blijf je bovenaan
   if (scrollen) $('#ritkaart').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -607,10 +662,40 @@ const REDEN_SPOOR = {
 
 const minuten = sec => (sec === null || sec === undefined) ? null : `${Math.round(sec / 60)} min`;
 
-function autoKop() {
+function autoKop(bezig) {
   return `<div class="autokop"><h3>${esc(t('auto_title'))}</h3>
       <span class="pill">EVConduit</span><div class="spacer"></div>
-      <button class="small ghost" id="btn-autoververs">${esc(t('auto_refresh'))}</button></div>`;
+      <button class="small ghost" id="btn-autoververs"${bezig ? ' disabled' : ''}>${esc(t('auto_refresh'))}</button></div>`;
+}
+
+/* Meteen iets laten zien zodra een rit opengaat.
+   Het ophalen bij EVConduit duurt een paar seconden — de eerste keer voor een rit
+   kost het ruim vier. Zonder deze regel staat er in die tijd niets, en dan lijkt
+   het of de functie het soms niet doet. Alleen als het ook echt ingesteld is:
+   anders zou iemand die het niet gebruikt een "zoeken…" zien dat nooit iets wordt. */
+function autoWachten() {
+  const vak = $('#ritauto');
+  if (!vak) return;
+  if (evActief === false) {          // zeker weten uit
+    vak.classList.add('hidden');
+    vak.innerHTML = '';
+    return;
+  }
+  vak.classList.remove('hidden');
+  vak.innerHTML = autoKop(true) + `<p class="muted klein">${esc(t('auto_looking'))}</p>`;
+}
+
+/* Eén keer bij het laden kijken of EVConduit is ingesteld. Zonder dit weet de pagina
+   niet of "zoeken…" zin heeft, en zou iedereen die het niet gebruikt een bericht
+   zien dat nooit iets wordt. Wordt ook na het bewaren van de instellingen opnieuw
+   gedaan, zodat aan- of uitzetten meteen doorkomt. */
+async function evStatusLaden() {
+  evStatusBezig = (async () => {
+    try {
+      evActief = !!(await api('api/evconduit/status')).ingesteld;
+    } catch { evActief = false; }
+  })();
+  return evStatusBezig;
 }
 
 function autoTekenen(d, trip) {
@@ -619,9 +704,23 @@ function autoTekenen(d, trip) {
   if (!vak) return;
 
   // Niets ingesteld: geen leeg vak tonen. Er is niets mis en er is niets te zien.
-  if (!d || d.reden === 'geen_evconduit') {
+  if (d && d.reden === 'geen_evconduit') {
     vak.classList.add('hidden');
     vak.innerHTML = '';
+    return;
+  }
+
+  // De oproep zelf mislukte — netwerk, tijdslimiet, een fout in de app. Zeg dat.
+  // Het vak weghalen zou het laten lijken of er niets aan de hand is.
+  if (!d) {
+    if (evActief === false) {
+      vak.classList.add('hidden');
+      vak.innerHTML = '';
+      return;
+    }
+    vak.classList.remove('hidden');
+    vak.innerHTML = autoKop() + `<p class="muted klein">${esc(t('auto_error'))}</p>`;
+    autoKnop(trip);
     return;
   }
 
@@ -1131,6 +1230,7 @@ async function instellingenBewaren() {
     });
     // Opnieuw lezen: dan staat er meteen of de sleutel nu bewaard is.
     await instellingenLaden();
+    await evStatusLaden();          // aan- of uitzetten moet meteen doorkomen
     instelMelding(t('saved'), 'goed');
   } catch (e) { instelMelding(e.message, 'fout'); }
 }
@@ -1154,3 +1254,4 @@ taalToepassen();
 themaZetten(localStorage.getItem('dashcam-theme') || 'dark');
 kalenderOpbouwen();
 overzichtLaden().catch(e => { $('#subtitle').textContent = `Fout: ${e.message}`; });
+evStatusLaden();

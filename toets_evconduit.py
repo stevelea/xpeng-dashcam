@@ -205,6 +205,80 @@ try:
 except Exception as exc:
     check('onzin-adres geweigerd', 'http' in str(exc), exc)
 
+# ── 11. Onze tijd staat MET zone in de index ─────────────────────────────────
+# De echte index bewaart "2026-09-16T10:56:22+10:00", niet een naïeve tijd. Wie
+# die zone negeert en de zone uit config.json plakt, verschuift elke rit zodra de
+# twee van elkaar afwijken.
+store._config['timezone'] = 'Australia/Sydney'
+t_syd = rit('2026-09-16T10:56:22+10:00', '2026-09-16T11:19:24+10:00')
+ons_syd = evconduit._ons_venster(t_syd)
+check('zone uit de index wordt gebruikt', ons_syd[0].strftime('%Y-%m-%d %H:%M') == '2026-09-16 00:56',
+      ons_syd[0].isoformat())
+store._config['timezone'] = 'Europe/Amsterdam'
+ons_amr = evconduit._ons_venster(t_syd)
+check('een andere config-zone verschuift een tijd met zone niet',
+      ons_amr[0] == ons_syd[0], f'{ons_amr[0].isoformat()} vs {ons_syd[0].isoformat()}')
+store._config['timezone'] = 'Europe/Amsterdam'
+
+# ── 12. Een hele dag in één verzoek ──────────────────────────────────────────
+evconduit.vergeet(con)
+drie = [
+    {'id': 101, 'day': '2026-09-14', 'start_ts': '2026-09-14T14:23:00',
+     'end_ts': '2026-09-14T14:41:00', 'clips': 10, 'seconds': 1080, 'km': None,
+     'measured': 0, 'note': None},
+    {'id': 102, 'day': '2026-09-14', 'start_ts': '2026-09-14T16:05:00',
+     'end_ts': '2026-09-14T16:25:00', 'clips': 8, 'seconds': 1200, 'km': None,
+     'measured': 0, 'note': None},
+    {'id': 103, 'day': '2026-09-14', 'start_ts': '2026-09-14T18:40:00',
+     'end_ts': '2026-09-14T19:05:00', 'clips': 9, 'seconds': 1500, 'km': 7.2,
+     'measured': 9, 'note': None},
+]
+# Onze tijden zijn lokale tijd (juli: UTC+2), de auto meldt UTC.
+met_ritten([auto('2026-09-14T12:23:10Z', '2026-09-14T12:41:00Z', id='a'),
+            auto('2026-09-14T14:05:05Z', '2026-09-14T14:25:00Z', id='b'),
+            auto('2026-09-14T16:40:00Z', '2026-09-14T19:05:00Z', id='c')])
+TIJDEN = []
+uit = evconduit.koppel_veel(con, drie, met_spoor=False)
+check('drie ritten in één keer gekoppeld',
+      len(uit) == 3 and all(v['beschikbaar'] for v in uit.values()),
+      {k: v['reden'] for k, v in uit.items()})
+check('de rittenlijst maar ÉÉN keer opgehaald',
+      len([u for u in TIJDEN if u.endswith('/user/xpeng/trips')]) == 1,
+      [u.split('/api')[-1] for u in TIJDEN])
+check('zonder spoor geen spoorverzoek', not any('/track' in u for u in TIJDEN), TIJDEN)
+
+auto_per_rit = evconduit.dag_auto(con, drie)
+check('dag_auto sleutelt op ons ritnummer', set(auto_per_rit) == {'101', '102', '103'},
+      list(auto_per_rit))
+check('dag_auto geeft de afstand van de auto', auto_per_rit['101']['km'] == 14.1,
+      auto_per_rit['101'])
+check('dag_auto meldt of het zeker is', auto_per_rit['101']['zeker'] is True)
+
+# ── 13. Het spoor wordt alsnog opgehaald als alleen de tegel het vroeg ───────
+met_ritten([auto('2026-09-14T12:23:10Z', '2026-09-14T12:41:00Z')],
+           spoor={'available': True, 'reason': None, 'seconds': [0, 60],
+                  'lat': [52.1, 52.2], 'lon': [5.1, 5.2], 'point_count': 2,
+                  'source_point_count': 500, 'coverage': 0.9, 'covered_seconds': 970,
+                  'trip_seconds': 1080, 'largest_gap_seconds': 30,
+                  'track_distance_km': 13.9, 'window': None})
+TIJDEN = []
+d = evconduit.koppel(con, drie[0])
+check('spoor wordt alsnog opgehaald na een tegel-koppeling',
+      any('/track' in u for u in TIJDEN), TIJDEN)
+check('en het is er ook', bool(d['spoor'] and d['spoor']['beschikbaar']), d['spoor'])
+TIJDEN = []
+evconduit.koppel(con, drie[0])
+check('tweede keer komt het spoor uit de cache', TIJDEN == [], TIJDEN)
+
+# ── 14. Een koppeling van een dag die niets oplevert ─────────────────────────
+# Eerst de cache leeg: rit 102 is hierboven al gekoppeld en zonder dit antwoordt de
+# cache in plaats van EVConduit.
+evconduit.vergeet(con)
+met_ritten([auto('2026-09-14T02:00:00Z', '2026-09-14T02:30:00Z')])
+leeg = evconduit.dag_auto(con, [drie[1]])
+check('geen treffer betekent geen afstand', leeg['102']['km'] is None, leeg['102'])
+check('en zeker is dan onwaar', leeg['102']['zeker'] is False)
+
 con.close()
 print()
 if fouten:
