@@ -68,6 +68,8 @@ const TAALEN = {
   unknown_place: 'unknown place',
   on_day_at: '{day} at {time}', view_trip: 'view the trip',
   emergency_note: 'Clips the car saved as an incident itself.',
+  month_prev: 'previous month', month_next: 'next month',
+  legend_recording: 'recording', legend_emergency: 'emergency',
   day_clips: '{n} clips · {gb} GB',
   day_clips_emerg: '{n} clips, {e} emergency · {gb} GB',
 };
@@ -108,6 +110,8 @@ const TAALNL = {
   unknown_place: 'onbekende plek',
   on_day_at: '{day} om {time}', view_trip: 'bekijk de rit',
   emergency_note: 'Opnames die de auto zelf als incident bewaarde.',
+  month_prev: 'vorige maand', month_next: 'volgende maand',
+  legend_recording: 'opname', legend_emergency: 'noodgeval',
   day_clips: '{n} clips · {gb} GB',
   day_clips_emerg: '{n} clips, {e} noodgeval · {gb} GB',
 };
@@ -154,6 +158,9 @@ const state = { dag: null, rit: null, momenten: [], open: -1, view: 'front' };
 const loc = () => (taal === 'en' ? 'en-GB' : 'nl-NL');
 const MONTHS = () => Array.from({ length: 12 }, (_, i) =>
   new Date(2000, i, 1).toLocaleDateString(loc(), { month: 'long' }));
+// Korte weekdagnamen, net als de maanden uit de browser.
+const WEEKDAYS = () => Array.from({ length: 7 }, (_, i) =>
+  new Date(2024, 0, 1 + i).toLocaleDateString(loc(), { weekday: 'short' }));
 
 const nf = (v, d = 1) => (v === null || v === undefined)
   ? '–' : Number(v).toLocaleString(loc(), { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -184,16 +191,16 @@ function kalenderOpbouwen() {
   const el = $('#kal-dagen');
   el.innerHTML = `
     <div class="kalkop">
-      <button class="kalpijl" data-stap="-1" title="vorige maand">‹</button>
+      <button class="kalpijl" data-stap="-1" title="${t('month_prev')}">‹</button>
       <select class="kal-maand"></select>
       <select class="kal-jaar"></select>
-      <button class="kalpijl" data-stap="1" title="volgende maand">›</button>
+      <button class="kalpijl" data-stap="1" title="${t('month_next')}">›</button>
     </div>
-    <div class="kalweek"><span>ma</span><span>di</span><span>wo</span><span>do</span><span>vr</span><span>za</span><span>zo</span></div>
+    <div class="kalweek">${WEEKDAYS().map(d => `<span>${d}</span>`).join('')}</div>
     <div class="kalgrid"></div>
     <div class="kaluitleg">
-      <span><i class="stip opname"></i>opname</span>
-      <span><i class="stip nood"></i>noodgeval</span>
+      <span><i class="stip opname"></i>${t('legend_recording')}</span>
+      <span><i class="stip nood"></i>${t('legend_emergency')}</span>
     </div>`;
   $$('.kalpijl', el).forEach(b => b.onclick = () => {
     const d = new Date(kal.jaar, kal.maand + (+b.dataset.stap), 1);
