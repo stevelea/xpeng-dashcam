@@ -114,6 +114,9 @@ const TAALNL = {
   legend_recording: 'opname', legend_emergency: 'noodgeval',
   day_clips: '{n} clips · {gb} GB',
   day_clips_emerg: '{n} clips, {e} noodgeval · {gb} GB',
+  measure_km: 'Kilometers meten',
+  build_route: 'Route bepalen',
+  loading: 'laden…',
 };
 
 let taal = localStorage.getItem('dashcam-taal') || 'nl';
@@ -488,7 +491,7 @@ $('#btn-meet').onclick = async ev => {
     await api(`api/trip/${state.rit}/measure`, { method: 'POST' });
     await dagKiezen(state.dag);
   } catch (e) { alert(t('measure_failed', { e: e.message })); }
-  finally { ev.target.disabled = false; ev.target.textContent = t('measure'); }
+  finally { ev.target.disabled = false; ev.target.textContent = t('measure_km'); }
 };
 
 $('#btn-route').onclick = async ev => {
