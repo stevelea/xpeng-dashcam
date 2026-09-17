@@ -48,6 +48,19 @@ These need something outside the app and are switched off unless you configure t
 - **Reminder.** A script that notifies you when the archive falls behind, so new trips do
   not pile up unmatched.
 
+### Link straight to a moment
+
+The viewer takes a few URL parameters, so another app — a trip log, say — can link
+directly to the clips for a moment rather than to a calendar:
+
+```
+?dag=2026-07-02&tijd=17:33&venster=10      # 17:33 ± 10 minutes
+```
+
+`tijd` is the centre of the window and `venster` its half-width in minutes. `?dag=` on
+its own opens the usual day view. See **[DEEPLINK.md](DEEPLINK.md)** for the parameters,
+copy-paste helpers in JavaScript and Python, and the time-zone pitfall to avoid.
+
 ---
 
 ## Requirements
