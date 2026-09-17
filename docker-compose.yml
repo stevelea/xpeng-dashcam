@@ -1,0 +1,54 @@
+# Docker Compose setup for the XPENG dashcam viewer.
+#
+#   1. Provide a config file next to this file (it is bind-mounted into the
+#      container, so it must exist first):
+#          cp config.example.json config.json
+#      then set "root" to the folder holding your footage.
+#   2. Build and start:
+#          docker compose up -d --build
+#   3. Build the index - the viewer is empty until you do:
+#          docker compose run --rm app python scan.py
+#          docker compose run --rm app python thumbs.py
+#          docker compose run --rm app python ritten.py
+#   4. Open http://<host>:8965
+#
+# Re-run the three commands in step 3 whenever you add new footage.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Baked into the image so files written into the mounted folders come
+        # out owned by you rather than by root. Override in .env if your user
+        # is not 1000:
+        #     echo "UID=$(id -u)"  >> .env
+        #     echo "GID=$(id -g)"  >> .env
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    image: xpeng-dashcam:local
+    container_name: xpeng-dashcam
+    restart: unless-stopped
+    # Must match the build args above, so the settings page can write.
+    user: "${UID:-1000}:${GID:-1000}"
+    ports:
+      - "8965:8965"
+    environment:
+      # System time zone for the container itself (log lines, and metadata such
+      # as when a route was built). This is NOT what dates the footage: clip
+      # times come from the "timezone" setting in config.json, which is what
+      # decides day boundaries and trip grouping. Set that one in the viewer's
+      # settings; keep this in step with it only so the two agree.
+      - TZ=${TZ:-Europe/Amsterdam}
+    volumes:
+      # The index (clips.db, routes.db) and the thumbnails. Keep these on the
+      # host so rebuilding the image never costs you a re-index.
+      - ./data:/app/data
+      - ./thumbs:/app/thumbs
+      # Your settings. Must exist on the host before starting.
+      - ./config.json:/app/config.json
+      # Where the footage lives, mounted READ-ONLY: the viewer never writes to
+      # your recordings. Point the left-hand side at your archive, e.g.
+      #   - /mnt/nas/xpeng:/footage:ro
+      # Use :ro,z instead of :ro on hosts with SELinux enabled.
+      - /mnt/xpg006camera:/footage:ro

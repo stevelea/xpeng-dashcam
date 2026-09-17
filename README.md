@@ -58,6 +58,7 @@ These need something outside the app and are switched off unless you configure t
 | ffmpeg | required for thumbnails and for reading the speed |
 | Disk | roughly 1 % of your footage size, for thumbnails and the index |
 | OS | macOS and Linux. Windows is untested. |
+| Docker | optional, for the container route — see below |
 
 The app itself needs only three Python packages: `fastapi`, `uvicorn` and `httpx`.
 
@@ -93,6 +94,42 @@ The demo video is deliberately blurred, so nothing of the real surroundings is
 recognisable, and the route on the map is **invented** — it does not correspond to where
 the footage was taken. Because blurring destroys the on-screen speed digits, the demo
 day carries its distances as stored values instead of reading them from the image.
+
+---
+
+## Run it with Docker
+
+Prefer a container? The image carries Python and ffmpeg, so nothing is installed on the
+host — handy on a NAS or home server that is always on.
+
+```bash
+cp config.example.json config.json     # then set "root" to your footage folder
+docker compose up -d --build
+```
+
+The viewer is empty until you build the index, exactly as with the venv workflow:
+
+```bash
+docker compose run --rm app python scan.py      # find the clips
+docker compose run --rm app python thumbs.py    # make the thumbnails
+docker compose run --rm app python ritten.py    # group the clips into trips
+```
+
+Then open <http://127.0.0.1:8965>. Re-run those three commands whenever you add new
+footage.
+
+Your settings, the index and the thumbnails live on the host (`config.json`, `data/`,
+`thumbs/`), so rebuilding the image never costs you a re-index. Footage is mounted
+**read-only**. Point the footage path in `docker-compose.yml` at your archive; use a
+`:ro,z` mount instead of `:ro` on hosts with SELinux.
+
+Keep the container's `TZ` in step with the `timezone` setting in `config.json`, or trips
+will be grouped against the wrong day boundaries.
+
+The image builds from the repository root. It applies one small portability fix during
+the build — see [`patches/`](patches/) — because `speed.py` hardcodes an ffmpeg
+hardware-acceleration flag that only exists on macOS, which would otherwise make the
+speed (and therefore the distance) silently produce nothing on Linux.
 
 ---
 

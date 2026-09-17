@@ -13,6 +13,9 @@ thumbnails.
 python3 -V
 ```
 
+> Using Docker instead? Skip to **[5b](#5b-or-run-it-with-docker)** — the image brings
+> Python and ffmpeg with it, so none of this section is needed.
+
 **ffmpeg** — needed for thumbnails and for reading the speed off the video.
 
 ```bash
@@ -133,6 +136,33 @@ a first batch of, say, 200 to see if it works:
 ```
 
 Refresh the browser. Your days should now appear in the calendar.
+
+---
+
+## 5b. Or run it with Docker
+
+If you would rather not install Python and ffmpeg on the host — on a NAS or a home
+server, say — everything above works from a container instead.
+
+```bash
+cp config.example.json config.json     # then set "root" to your footage folder
+docker compose up -d --build
+```
+
+Steps 2 to 4 are then replaced by the container, and the index is built with:
+
+```bash
+docker compose run --rm app python scan.py
+docker compose run --rm app python thumbs.py
+docker compose run --rm app python ritten.py
+```
+
+The same `thumbs.py 200` limit works: `docker compose run --rm app python thumbs.py 200`.
+
+`config.json`, `data/` and `thumbs/` are bind-mounted from the project folder, so your
+settings and index survive a rebuild, and the footage is mounted read-only. Set the
+footage path in `docker-compose.yml` and keep the container's `TZ` equal to the
+`timezone` in `config.json`.
 
 ---
 
