@@ -37,15 +37,95 @@ const TAALEN = {
   days: 'days', until: 'to',
   nothing_indexed: 'nothing indexed yet',
   nothing_found: 'No recognisable file names found.',
+  ev_url: 'EVConduit address',
+  ev_url_hint: 'Leave empty to fetch nothing. Trips are matched on time, not on number.',
+  ev_key: 'API key',
+  ev_key_hint: 'From EVConduit, on your account. Stored on the server only.',
+  ev_marge: 'Clock margin in seconds',
+  ev_marge_hint: 'The dashcam and the car never agree exactly. How much difference you still accept.',
+  ev_aan: 'Fetch data from the car',
+  ev_test: 'Test connection',
+  ev_forget: 'Forget fetched data',
+  ev_testing: 'Testing\u2026',
+  ev_key_yes: 'A key is stored. Leave empty to keep it.',
+  ev_key_no: 'No key stored yet.',
+  ev_forgotten: 'Erased.',
+  auto_title: 'Data from the car',
+  auto_from_car: 'Car (CAN bus)',
+  auto_from_video: 'Video (measured)',
+  auto_diff: 'The car covered {car} km and the video says {video} km — {diff} km apart.',
+  auto_diff_none: 'No distance measured from the video for this trip yet.',
+  auto_duration: 'Duration',
+  auto_energy: 'Energy used',
+  auto_consumption: 'Consumption',
+  auto_odo: 'Odometer',
+  auto_speed_max: 'Top speed',
+  auto_speed_mean: 'Average while moving',
+  auto_soc: 'Battery',
+  auto_vin: 'VIN',
+  auto_clock: 'Clock difference',
+  auto_clock_val: 'start {start}s, end {end}s against the video',
+  auto_refresh: 'Refresh',
+  auto_reason_geen_rit: 'No drive from the car matches this time.',
+  auto_reason_twijfel: 'There is a drive that looks like this one, but the times differ too much to claim it.',
+  auto_reason_geen_tijd: 'This trip has no usable start time.',
+  auto_reason_onbereikbaar: 'Could not reach EVConduit.',
+  auto_ambiguous: 'Another drive from the car also overlaps this one — the two apps divided the day differently.',
+  spoor_title: 'GPS track from the car',
+  spoor_coverage: 'measured over {percent}% of the drive',
+  spoor_points: '{n} readings',
+  spoor_gap: 'largest gap {min} min',
+  spoor_km: 'track {km} km',
+  spoor_none_no_subject: 'This trip carries no VIN to look positions up by.',
+  spoor_none_no_positions: 'No GPS points in this window — nothing is posting a logger to EVConduit.',
+  spoor_none_too_few_points: 'One reading is a dot, not a drive.',
+  spoor_none_trip_incomplete: 'This trip has no start or end to search between.',
+  spoor_none_other: 'No track available.',
 };
 const TAALNL = {
   need_folder: 'Vul eerst een map in.',
+  loading: 'laden…',
   testing: 'Bezig met kijken…', saving: 'Bezig met bewaren…', saved: 'Bewaard.',
   main_folder: 'de hoofdmap',
   days: 'dagen', until: 't/m',
   nothing_indexed: 'nog niets geïndexeerd',
   found: '{n} bruikbare clips gevonden in {where}.',
   nothing_found: 'Geen herkenbare bestandsnamen gevonden.',
+  ev_testing: 'Bezig met testen…',
+  ev_key_yes: 'Er staat een sleutel. Laat leeg om hem te bewaren.',
+  ev_key_no: 'Nog geen sleutel bewaard.',
+  ev_forgotten: 'Gewist.',
+  auto_title: 'Gegevens van de auto',
+  auto_from_car: 'Auto (CAN-bus)',
+  auto_from_video: 'Beeld (gemeten)',
+  auto_diff: 'De auto reed {car} km, het beeld zegt {video} km — {diff} km verschil.',
+  auto_diff_none: 'Voor deze rit is nog geen afstand uit het beeld gemeten.',
+  auto_duration: 'Duur',
+  auto_energy: 'Verbruikte energie',
+  auto_consumption: 'Verbruik',
+  auto_odo: 'Kilometerstand',
+  auto_speed_max: 'Topsnelheid',
+  auto_speed_mean: 'Gemiddeld rijdend',
+  auto_soc: 'Accu',
+  auto_vin: 'VIN',
+  auto_clock: 'Klokverschil',
+  auto_clock_val: 'begin {start} s, eind {end} s ten opzichte van het beeld',
+  auto_refresh: 'Verversen',
+  auto_reason_geen_rit: 'Geen rit van de auto gevonden bij deze tijd.',
+  auto_reason_twijfel: 'Er is een rit die erop lijkt, maar de tijden wijken te veel af om hem op te eisen.',
+  auto_reason_geen_tijd: 'Deze rit heeft geen bruikbare begintijd.',
+  auto_reason_onbereikbaar: 'EVConduit was niet te bereiken.',
+  auto_ambiguous: 'Er overlapt nog een rit van de auto — de twee apps hebben de dag anders ingedeeld.',
+  spoor_title: 'GPS-spoor van de auto',
+  spoor_coverage: 'gemeten over {percent}% van de rit',
+  spoor_points: '{n} metingen',
+  spoor_gap: 'grootste gat {min} min',
+  spoor_km: 'spoor {km} km',
+  spoor_none_no_subject: 'Deze rit heeft geen VIN om posities bij op te zoeken.',
+  spoor_none_no_positions: 'Geen GPS-punten in dit tijdvak — er post niets naar EVConduit.',
+  spoor_none_too_few_points: 'Eén meting is een punt, geen rit.',
+  spoor_none_trip_incomplete: 'Deze rit heeft geen begin of eind om tussen te zoeken.',
+  spoor_none_other: 'Geen spoor beschikbaar.',
 };
 
 let taal = localStorage.getItem('dashcam-taal') || 'nl';
@@ -78,6 +158,12 @@ function taalZetten(nieuw) {
   // Deze twee zijn ooit opgebouwd en kennen de nieuwe taal nog niet
   try { kalenderKeuzes(); kalenderTekenen(); } catch (e) { /* kalender nog leeg */ }
   try { ondertitelZetten(); } catch (e) { /* overzicht nog niet geladen */ }
+  // Het instellingenscherm en de kaart van de rit zetten een paar teksten zelf —
+  // bijvoorbeeld of er al een sleutel bewaard is. Die moeten opnieuw opgebouwd.
+  if (!$('#instellingen').classList.contains('hidden')) {
+    instellingenLaden().catch(() => {});
+  }
+  if (state.rit) ritOpenen(state.rit, false).catch(() => {});
 }
 
 const state = { dag: null, rit: null, momenten: [], open: -1, view: 'front' };
@@ -227,6 +313,10 @@ async function ritLijstTekenen(ritten) {
 /* ── Een rit ───────────────────────────────────────────────────────────────── */
 let ritmap = null;
 let ritlaag = null;
+// Het spoor van de auto zit in een eigen laag: het is een andere meting dan de
+// route die wij zelf opbouwen, en de twee mogen elkaar niet overschrijven.
+let autolaag = null;
+let ritgrenzen = null;
 
 function ritSluiten() {
   state.rit = null;
@@ -249,7 +339,13 @@ async function ritOpenen(id, scrollen = true) {
 
   $$('.dagrit').forEach(b => b.classList.toggle('actief', +b.dataset.id === id));
   rasterTekenen(d.fragmenten.map(f => ({ ...f, day: t.day })), false);
-  await ritRouteTekenen(id, t);
+  // De twee oproepen lopen naast elkaar: de gegevens van de auto mogen niet op de
+  // route wachten, en andersom. autoTekenen tekent daarna in de kaart die er dan staat.
+  const [, auto] = await Promise.all([
+    ritRouteTekenen(id, t),
+    api(`api/trip/${id}/auto`).catch(() => null),
+  ]);
+  autoTekenen(auto, t);
   // alleen meebewegen als je zelf een rit aanklikt; bij een directe link blijf je bovenaan
   if (scrollen) $('#ritkaart').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -273,7 +369,8 @@ async function ritRouteTekenen(id, trip) {
       el.innerHTML = '<div><i></i>gemeten spoor</div>'
         + '<div><i class="gereconstrueerd"></i>gereconstrueerd</div>'
         + '<div><i class="punt"></i>bekende plek</div>'
-        + '<div><i class="punt aangenomen"></i>aangenomen plek</div>';
+        + '<div><i class="punt aangenomen"></i>aangenomen plek</div>'
+        + '<div><i class="auto"></i>spoor van de auto</div>';
       return el;
     };
     legenda.addTo(ritmap);
@@ -397,6 +494,7 @@ function beginEindMerk(coords, laag) {
     }).addTo(ritlaag).bindPopup(`<b>${p.label || 'punt'}</b><br>${p.ts.slice(11, 16)} · ${p.source}`);
   }
   if (!grenzen && cirkels.length) grenzen = L.latLngBounds(cirkels);
+  ritgrenzen = grenzen;
   if (grenzen) ritmap.fitBounds(grenzen.pad(0.25));
 
   $('#ritpunten').innerHTML = punten.length
@@ -404,6 +502,169 @@ function beginEindMerk(coords, laag) {
         ${p.ts.slice(11, 16)} ${p.label || 'punt'}<i>${p.source}</i></span>`).join('')
     : '<span class="muted">Geen bekende plekken bij deze rit. '
       + 'Foto\'s van dat moment of een afgelezen bord kunnen dit vullen.</span>';
+}
+
+/* ── Gegevens van de auto (EVConduit) ──────────────────────────────────────── */
+/* Twee metingen van dezelfde rit: de onze komt uit het beeld, die van de auto uit
+   de CAN-bus. Ze naast elkaar zetten is het hele punt. Een verschil tussen de twee
+   is informatie; het wegmoffelen ervan zou doen alsof we het zeker weten.
+
+   En waar de auto géén spoor heeft zeggen we dat ook — EVConduit haalt zijn
+   posities niet uit de auto maar van een logger die de eigenaar zelf ergens op
+   richt. "Geen spoor" is daar de gewone toestand, niet een fout. */
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g,
+  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const REDEN_SPOOR = {
+  no_subject: 'spoor_none_no_subject',
+  no_positions: 'spoor_none_no_positions',
+  too_few_points: 'spoor_none_too_few_points',
+  trip_incomplete: 'spoor_none_trip_incomplete',
+};
+
+const minuten = sec => (sec === null || sec === undefined) ? null : `${Math.round(sec / 60)} min`;
+
+function autoKop() {
+  return `<div class="autokop"><h3>${esc(t('auto_title'))}</h3>
+      <span class="pill">EVConduit</span><div class="spacer"></div>
+      <button class="small ghost" id="btn-autoververs">${esc(t('auto_refresh'))}</button></div>`;
+}
+
+function autoTekenen(d, trip) {
+  const vak = $('#ritauto');
+  if (autolaag && ritmap) { ritmap.removeLayer(autolaag); autolaag = null; }
+  if (!vak) return;
+
+  // Niets ingesteld: geen leeg vak tonen. Er is niets mis en er is niets te zien.
+  if (!d || d.reden === 'geen_evconduit') {
+    vak.classList.add('hidden');
+    vak.innerHTML = '';
+    return;
+  }
+
+  const r = d.rit;
+  vak.classList.remove('hidden');
+
+  if (!r) {
+    const sleutel = { twijfel: 'auto_reason_twijfel', geen_tijd: 'auto_reason_geen_tijd',
+                      onbereikbaar: 'auto_reason_onbereikbaar' }[d.reden] || 'auto_reason_geen_rit';
+    vak.innerHTML = autoKop()
+      + `<p class="muted klein">${esc(t(sleutel))}${d.melding ? ' — ' + esc(d.melding) : ''}</p>`;
+    autoKnop(trip);
+    return;
+  }
+
+  const kmAuto = r.distance_km == null ? null : Number(r.distance_km);
+  const kmVideo = trip.km == null ? null : Number(trip.km);
+  const verschil = (kmAuto !== null && kmVideo !== null) ? Math.abs(kmAuto - kmVideo) : null;
+  const verbruik = (r.energy_kwh != null && kmAuto) ? (Number(r.energy_kwh) / kmAuto * 100) : null;
+
+  const rijen = [
+    [t('auto_duration'), minuten(r.duration_seconds)],
+    [t('auto_energy'), r.energy_kwh != null ? `${nf(r.energy_kwh, 2)} kWh` : null],
+    [t('auto_consumption'), verbruik != null ? `${nf(verbruik, 1)} kWh/100 km` : null],
+    [t('auto_odo'), (r.odometer_start != null && r.odometer_end != null)
+      ? `${nf(r.odometer_start, 0)} → ${nf(r.odometer_end, 0)} km` : null],
+    [t('auto_speed_max'), r.max_speed_kmh != null ? `${nf(r.max_speed_kmh, 0)} km/h` : null],
+    [t('auto_speed_mean'), r.mean_moving_speed_kmh != null
+      ? `${nf(r.mean_moving_speed_kmh, 0)} km/h` : null],
+    [t('auto_soc'), (r.soc_start != null && r.soc_end != null)
+      ? `${nf(r.soc_start, 0)}% → ${nf(r.soc_end, 0)}%` : null],
+    [t('auto_vin'), r.vin || null],
+    // Een constante afwijking is klokverschil tussen dashcam en auto. Zichtbaar,
+    // want anders lijkt onze eigen tijd preciezer dan hij is.
+    [t('auto_clock'), d.afwijking
+      ? t('auto_clock_val').replace('{start}', d.afwijking.start_s)
+                           .replace('{end}', d.afwijking.eind_s)
+      : null],
+  ].filter(x => x[1] != null);
+
+  let h = autoKop();
+  h += '<div class="autovgl">'
+    + `<div class="autovglvak"><span>${esc(t('auto_from_car'))}</span>`
+    + `<b>${kmAuto === null ? '–' : nf(kmAuto) + ' km'}</b></div>`
+    + `<div class="autovglvak"><span>${esc(t('auto_from_video'))}</span>`
+    + `<b class="${kmVideo === null ? 'onbekend' : ''}">`
+    + `${kmVideo === null ? '– km' : nf(kmVideo) + ' km'}</b></div></div>`;
+
+  h += verschil === null
+    ? `<p class="muted klein">${esc(t('auto_diff_none'))}</p>`
+    : `<p class="autoverschil${verschil >= 1 ? ' groot' : ''}">`
+      + esc(t('auto_diff').replace('{car}', nf(kmAuto)).replace('{video}', nf(kmVideo))
+                       .replace('{diff}', nf(verschil)))
+      + '</p>';
+
+  h += '<dl class="autolijst">' + rijen.map(([k, v]) =>
+    `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('') + '</dl>';
+
+  if (d.kandidaten && d.kandidaten.length) {
+    h += `<p class="muted klein">${esc(t('auto_ambiguous'))}</p>`;
+  }
+  h += spoorBlok(d.spoor);
+  vak.innerHTML = h;
+
+  spoorTekenen(d.spoor);
+  autoKnop(trip);
+}
+
+function autoKnop(trip) {
+  const knop = $('#btn-autoververs');
+  if (!knop) return;
+  knop.onclick = async () => {
+    knop.disabled = true;
+    knop.textContent = t('loading');
+    try {
+      autoTekenen(await api(`api/trip/${state.rit}/auto`, { method: 'POST' }), trip);
+    } catch (e) {
+      knop.disabled = false;
+      knop.textContent = e.message;
+    }
+  };
+}
+
+function spoorBlok(s) {
+  if (!s) return '';
+  if (!s.beschikbaar) {
+    const sleutel = REDEN_SPOOR[s.reden] || 'spoor_none_other';
+    return `<div class="autospoor"><h4>${esc(t('spoor_title'))}</h4>`
+      + `<p class="muted klein">${esc(t(sleutel))}`
+      + `${s.melding ? ' — ' + esc(s.melding) : ''}</p></div>`;
+  }
+  const stukken = [];
+  if (s.dekking != null) {
+    stukken.push(t('spoor_coverage').replace('{percent}', Math.round(s.dekking * 100)));
+  }
+  if (s.punten_bron || s.punten) {
+    stukken.push(t('spoor_points').replace('{n}', s.punten_bron || s.punten));
+  }
+  if (s.grootste_gat_s != null) {
+    stukken.push(t('spoor_gap').replace('{min}', (s.grootste_gat_s / 60).toFixed(1)));
+  }
+  if (s.spoor_km != null) stukken.push(t('spoor_km').replace('{km}', nf(s.spoor_km)));
+  return `<div class="autospoor"><h4>${esc(t('spoor_title'))}</h4>`
+    + `<p class="klein">${stukken.map(esc).join(' · ')}</p></div>`;
+}
+
+function spoorTekenen(s) {
+  if (!s || !s.beschikbaar || !s.geojson || !ritmap) return;
+  autolaag = L.layerGroup().addTo(ritmap);
+  // Zelfde behandeling als ons eigen gemeten spoor: een donkere onderlaag zodat de
+  // lijn niet in de kaart verdwijnt, maar een eigen kleur — het is een andere bron.
+  L.geoJSON(s.geojson, { style: { color: 'rgba(0,0,0,.45)', weight: 9, opacity: 1 } })
+    .addTo(autolaag);
+  const lijn = L.geoJSON(s.geojson, {
+    style: { color: '#5aa9e6', weight: 5, opacity: 1, lineCap: 'round' },
+  }).addTo(autolaag);
+  pijlenLangs((s.geojson.coordinates || []).map(c => [c[1], c[0]]), autolaag, '#5aa9e6');
+
+  // Meebewegen zodat het spoor van de auto in beeld komt ook als onze eigen route
+  // ergens anders ligt.
+  const b = lijn.getBounds();
+  if (b && b.isValid()) {
+    ritgrenzen = ritgrenzen ? ritgrenzen.extend(b) : b;
+    ritmap.fitBounds(ritgrenzen.pad(0.25));
+  }
 }
 
 $('#btn-meet').onclick = async ev => {
@@ -674,7 +935,57 @@ async function instellingenLaden() {
   $('#set-nood').value = c.folders?.noodgeval || '';
   $('#set-tz').value = c.timezone || '';
   $('#set-view').value = c.primary_view || '';
+  // De sleutel komt nooit terug van de server; het veld blijft dus leeg en zegt
+  // alleen of er al een bewaard is.
+  const ev = c.evconduit || {};
+  $('#set-ev-url').value = ev.url || '';
+  $('#set-ev-key').value = '';
+  $('#set-ev-marge').value = ev.marge_s ?? 180;
+  $('#set-ev-aan').checked = ev.aan !== false;
+  $('#set-ev-keyhint').textContent = ev.heeft_sleutel ? t('ev_key_yes') : t('ev_key_no');
+  $('#set-ev-melding').textContent = '';
   instelMelding('');
+}
+
+async function evconduitToetsen() {
+  const melding = $('#set-ev-melding');
+  melding.className = 'instelmelding';
+  melding.textContent = t('ev_testing');
+  try {
+    const r = await api('api/evconduit/toets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: $('#set-ev-url').value.trim(),
+        sleutel: $('#set-ev-key').value,
+      }),
+    });
+    if (!r.ok) {
+      melding.textContent = r.reden || '?';
+      melding.className = 'instelmelding fout';
+    } else if (r.ritten) {
+      melding.textContent = `${r.ritten} ritten · ${r.nieuwste ? r.nieuwste.slice(0, 16).replace('T', ' ') : ''}`;
+      melding.className = 'instelmelding goed';
+    } else {
+      melding.textContent = r.melding || '';
+      melding.className = 'instelmelding';
+    }
+  } catch (e) {
+    melding.textContent = e.message;
+    melding.className = 'instelmelding fout';
+  }
+}
+
+async function evconduitVergeet() {
+  const melding = $('#set-ev-melding');
+  try {
+    await api('api/evconduit/vergeet', { method: 'POST' });
+    melding.textContent = t('ev_forgotten');
+    melding.className = 'instelmelding goed';
+  } catch (e) {
+    melding.textContent = e.message;
+    melding.className = 'instelmelding fout';
+  }
 }
 
 async function instellingenToetsen() {
@@ -704,8 +1015,17 @@ async function instellingenBewaren() {
         folders: instelMappen(),
         timezone: $('#set-tz').value.trim(),
         primary_view: $('#set-view').value.trim(),
+        evconduit: {
+          url: $('#set-ev-url').value.trim(),
+          // Leeg laten betekent "laat de bewaarde sleutel staan".
+          sleutel: $('#set-ev-key').value,
+          marge_s: $('#set-ev-marge').value,
+          aan: $('#set-ev-aan').checked,
+        },
       }),
     });
+    // Opnieuw lezen: dan staat er meteen of de sleutel nu bewaard is.
+    await instellingenLaden();
     instelMelding(t('saved'), 'goed');
   } catch (e) { instelMelding(e.message, 'fout'); }
 }
@@ -717,6 +1037,8 @@ $('#btn-settings').onclick = () => {
 $('#btn-insteldicht').onclick = () => $('#instellingen').classList.add('hidden');
 $('#btn-instelcheck').onclick = instellingenToetsen;
 $('#btn-instelbewaar').onclick = instellingenBewaren;
+$('#btn-evtoets').onclick = evconduitToetsen;
+$('#btn-evvergeet').onclick = evconduitVergeet;
 
 $$('[data-i18n]').forEach(el => { el.dataset.nl = el.textContent.trim(); });
 $$('[data-i18n-title]').forEach(el => { el.dataset.nlTitle = el.title; });

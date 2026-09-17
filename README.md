@@ -47,6 +47,57 @@ These need something outside the app and are switched off unless you configure t
   and it never modifies the library.
 - **Reminder.** A script that notifies you when the archive falls behind, so new trips do
   not pile up unmatched.
+- **Data from the car.** If you use [EVConduit](https://evconduit.com) and it holds your
+  XPENG exports, picking a trip also fetches what the car itself recorded for that drive —
+  distance, energy, consumption, odometer, top speed, battery — and draws its GPS track if
+  one exists. The car's distance is shown *next to* the distance measured from the video,
+  never instead of it: the two come from different instruments and the difference between
+  them is the interesting part. See [Data from the car](#data-from-the-car) below.
+
+---
+
+## Data from the car
+
+An XPENG data export holds no location of any kind, and the numbers in it — distance
+integrated from 1 Hz CAN data, energy, consumption — are the car's own measurements of a
+drive. The dashcam measured the same drive a different way: it reads the speed digits off
+the video. Showing both is a cross-check neither source can do alone.
+
+To switch it on: **Settings → EVConduit address + API key**, then *Test connection*. The
+key is a per-account EVConduit API key; it is stored on your own server in `config.json`
+and is never sent back to the browser.
+
+**The two sides share no identifier.** Dashcam trip numbers are reassigned every time the
+archive is re-indexed, an EVConduit trip is a UUID, and a filename carries no VIN. So
+trips are matched on **time**: the dashcam's window, converted to UTC with the timezone
+above, against the car's own start and end. The clocks are three separate devices and
+never agree exactly, so a margin is allowed (`marge_s`, 180 s by default).
+
+That matching is deliberately cautious, and the app says which of these it is:
+
+| What you see | What it means |
+|---|---|
+| a match | A drive from the car covers most of this one. |
+| *times differ too much* | Something overlaps, but not enough to claim it is this drive. |
+| *no drive matches* | The car has no drive at this time. |
+| *could not reach* | EVConduit is down, or the key was refused. |
+
+The clock difference between the car and the dashcam is displayed rather than silently
+absorbed — a viewer that hides 90 seconds of clock error is claiming a precision it does
+not have.
+
+**About the GPS track.** EVConduit has no location from the export; its tracks come from a
+logger the owner points at it — a phone, a Home Assistant `device_tracker`, and so on.
+That may well be a *different* device from the one feeding this app's own
+[location logger](#optional-extras), and the two can legitimately disagree. Nothing here
+asks the car for a route it does not have: if no logger posts to EVConduit, every trip
+comes back without a track and the app says so, in the words of whichever case it is.
+
+*(Note: ABRP is outbound-only in EVConduit — it sends telemetry to ABRP and reads no
+position back — so a drive whose only GPS was recorded by ABRP is not in EVConduit.)*
+
+The track is drawn in its own colour, with its coverage and largest gap shown beside it. A
+track spanning 12% of a drive says so.
 
 ---
 

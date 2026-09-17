@@ -20,6 +20,7 @@ import thumbs as thumbs_mod
 import ritten as ritten_mod
 import route as route_mod
 import fotos as fotos_mod
+import evconduit as evconduit_mod
 
 AMS = store.tijdzone()
 STATIC = HERE / 'static'
@@ -300,6 +301,95 @@ def api_route_bouw(trip_id: int):
         raise HTTPException(404, str(exc))
 
 
+# ── Wat de auto zelf van de rit weet (EVConduit) ──────────────────────────────
+@app.get('/api/trip/{trip_id}/auto')
+def api_trip_auto(trip_id: int):
+    """De gegevens van de auto bij deze rit, plus het gereden spoor als er een is.
+
+    Gekoppeld op tijd, niet op nummer: zie de uitleg bovenin evconduit.py. Wat we
+    eerder ophaalden komt uit de cache; een POST haalt het opnieuw op.
+    """
+    con = store.connect()
+    r = con.execute('SELECT * FROM trips WHERE id = ?', (trip_id,)).fetchone()
+    if not r:
+        con.close()
+        raise HTTPException(404, 'rit niet gevonden')
+    try:
+        d = evconduit_mod.koppel(con, r)
+    finally:
+        con.close()
+    d['trip'] = trip_dict(r)
+    return d
+
+
+@app.post('/api/trip/{trip_id}/auto')
+def api_trip_auto_ververs(trip_id: int):
+    con = store.connect()
+    r = con.execute('SELECT * FROM trips WHERE id = ?', (trip_id,)).fetchone()
+    if not r:
+        con.close()
+        raise HTTPException(404, 'rit niet gevonden')
+    try:
+        d = evconduit_mod.koppel(con, r, forceer=True)
+    finally:
+        con.close()
+    d['trip'] = trip_dict(r)
+    return d
+
+
+@app.delete('/api/trip/{trip_id}/auto')
+def api_trip_auto_vergeet(trip_id: int):
+    """De koppeling weggooien. Nodig als een rit opnieuw is ingedeeld."""
+    con = store.connect()
+    r = con.execute('SELECT start_ts FROM trips WHERE id = ?', (trip_id,)).fetchone()
+    if not r:
+        con.close()
+        raise HTTPException(404, 'rit niet gevonden')
+    evconduit_mod.vergeet(con, r['start_ts'])
+    con.close()
+    return {'ok': True}
+
+
+@app.get('/api/evconduit/status')
+def api_evconduit_status():
+    con = store.connect()
+    try:
+        return evconduit_mod.status(con)
+    finally:
+        con.close()
+
+
+@app.post('/api/evconduit/toets')
+async def api_evconduit_toets(request: Request):
+    """Testen met wat er in het formulier staat, nog voordat het bewaard is.
+
+    POST en geen GET: in een query string zou de sleutel in het logboek van deze
+    server én van elke proxy daarvoor terechtkomen.
+    """
+    try:
+        binnen = await request.json()
+    except Exception:
+        binnen = {}
+    if not isinstance(binnen, dict):
+        binnen = {}
+    evconduit_mod.tijdelijk(url=(binnen.get('url') or '').strip(),
+                            sleutel=(binnen.get('sleutel') or '').strip())
+    try:
+        return evconduit_mod.toets()
+    finally:
+        evconduit_mod.wis_tijdelijk()
+
+
+@app.post('/api/evconduit/vergeet')
+def api_evconduit_vergeet():
+    con = store.connect()
+    try:
+        evconduit_mod.vergeet(con)
+    finally:
+        con.close()
+    return {'ok': True}
+
+
 @app.get('/api/routes')
 def api_routes():
     """Alle ritten waarvan een route bekend is, met de plaatsen die erbij horen."""
@@ -451,12 +541,19 @@ def settings_lezen():
     """Alleen de velden die een gebruiker zelf mag zetten. Geen tokens, geen paden
     naar andere diensten."""
     cfg = store.load_config()
+    ev = cfg.get('evconduit') or {}
     return {
         'root': cfg.get('root', ''),
         'folders': cfg.get('folders', {}),
         'timezone': cfg.get('timezone', 'Europe/Amsterdam'),
         'primary_view': (cfg.get('views') or {}).get('primary', 'front'),
         'port': (cfg.get('web') or {}).get('port'),
+        # De sleutel gaat er NOOIT uit, ook niet terug naar de eigen pagina. Alleen
+        # of hij er is, zodat het formulier kan zeggen "er staat een sleutel" zonder
+        # hem te tonen.
+        'evconduit': {'url': ev.get('url', ''), 'marge_s': ev.get('marge_s', 180),
+                      'aan': bool(ev.get('aan', True)),
+                      'heeft_sleutel': bool((ev.get('sleutel') or '').strip())},
     }
 
 
@@ -519,8 +616,46 @@ async def settings_bewaren(request: Request):
     if hoofd:
         cfg['views'] = {**(cfg.get('views') or {}), 'primary': hoofd}
 
+    ev = binnen.get('evconduit')
+    if isinstance(ev, dict):
+        cfg['evconduit'] = _evconduit_bewaren(cfg.get('evconduit') or {}, ev)
+
     store.save_config(cfg)
     return settings_lezen()
+
+
+def _waar(waarde):
+    """Een vinkje komt als boolean, maar uit een formulier ook als 'true' of 'aan'."""
+    if isinstance(waarde, bool):
+        return waarde
+    return str(waarde).strip().lower() in ('1', 'true', 'ja', 'aan', 'on', 'yes')
+
+
+def _evconduit_bewaren(oud, nieuw):
+    """De EVConduit-instellingen bijwerken zonder de bewaarde sleutel te verliezen.
+
+    Een leeg sleutelveld betekent "laat staan", niet "wissen". Anders moet je het
+    token opnieuw plakken zodra je alleen de marge verzet. Wissen kan met
+    `sleutel_wis`, zodat het een bewuste handeling is.
+    """
+    uit = dict(oud)
+    if 'url' in nieuw:
+        url = (nieuw.get('url') or '').strip().rstrip('/')
+        if url and not url.startswith(('http://', 'https://')):
+            raise HTTPException(400, 'het adres moet met http:// of https:// beginnen')
+        uit['url'] = url
+    if (nieuw.get('sleutel') or '').strip():
+        uit['sleutel'] = nieuw['sleutel'].strip()
+    if nieuw.get('sleutel_wis'):
+        uit['sleutel'] = ''
+    if 'marge_s' in nieuw:
+        try:
+            uit['marge_s'] = max(0, min(int(nieuw['marge_s']), 3600))
+        except (TypeError, ValueError):
+            raise HTTPException(400, 'de marge moet een aantal seconden zijn')
+    if 'aan' in nieuw:
+        uit['aan'] = _waar(nieuw['aan'])
+    return uit
 
 
 @app.get('/healthz')

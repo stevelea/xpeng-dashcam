@@ -220,6 +220,9 @@ html[data-theme="dark"] .leaflet-tile { filter: brightness(.72) saturate(.7) con
 .kaartlegenda div { display: flex; align-items: center; gap: .45rem; }
 .kaartlegenda i { width: 20px; height: 0; border-top: 4px solid #4cbf54; display: inline-block; }
 .kaartlegenda i.gereconstrueerd { border-top-style: dashed; border-top-color: #f0bf63; }
+/* Het spoor van de auto: ook gemeten, maar door een ander apparaat dan de
+   dashcam. Een eigen kleur, want het is een tweede bron en geen bevestiging. */
+.kaartlegenda i.auto { border-top-color: #5aa9e6; }
 .kaartlegenda i.punt {
   width: 10px; height: 10px; border: 2px solid #1a1a1a; background: #f0bf63;
   border-radius: 50%; border-top-width: 2px;
@@ -306,3 +309,54 @@ html[data-theme="dark"] .leaflet-tile { filter: brightness(.72) saturate(.7) con
 }
 
 .taalknop { font: 600 .74rem "Lexend Deca", sans-serif; letter-spacing: .04em; }
+
+/* ── Gegevens van de auto ─────────────────────────────────────────────────────
+   Verschijnt onder de kaart zodra EVConduit is ingesteld. De twee afstanden staan
+   even groot naast elkaar: het zijn twee metingen van dezelfde rit en geen van
+   beide is "de" waarheid. Onze kilometers komen uit het beeld, die van de auto uit
+   de CAN-bus, en juist het verschil ertussen is de moeite waard om te zien. */
+.ritauto { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .9rem; }
+.ritauto.hidden { display: none; }
+.autokop { display: flex; align-items: center; gap: .6rem; margin-bottom: .7rem; }
+.autokop h3 { font-size: .95rem; margin: 0; }
+.autokop .spacer { flex: 1; }
+
+.autovgl { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+.autovglvak {
+  background: var(--card-soft); border: 1px solid var(--line); border-radius: 11px;
+  padding: .6rem .75rem; display: grid; gap: .15rem;
+}
+.autovglvak span { font-size: .7rem; color: var(--muted); }
+.autovglvak b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.autovglvak b.onbekend { color: var(--muted); font-weight: 400; }
+
+/* Een verschil van een kilometer of meer is geen afronding meer. */
+.autoverschil { margin: .6rem 0 0; font-size: .8rem; color: var(--muted); }
+.autoverschil.groot { color: #d9911f; }
+
+.autolijst { margin: .9rem 0 0; display: grid; gap: .35rem; }
+.autolijst > div {
+  display: flex; justify-content: space-between; gap: 1rem;
+  border-bottom: 1px solid var(--line); padding-bottom: .3rem;
+}
+.autolijst dt { font-size: .76rem; color: var(--muted); }
+.autolijst dd {
+  margin: 0; font-size: .82rem; text-align: right; font-variant-numeric: tabular-nums;
+}
+
+.autospoor { margin-top: .9rem; }
+.autospoor h4 { margin: 0 0 .2rem; font-size: .8rem; }
+.autospoor p { margin: 0; }
+.klein { font-size: .78rem; }
+
+/* Een vinkje met het woord ernaast, niet erboven. */
+.instelveld.vinkje {
+  grid-auto-flow: column; justify-content: start; align-items: center; gap: .5rem;
+  align-content: center;
+}
+.instelveld.vinkje input { width: auto; min-height: 0; accent-color: var(--gold); }
+.instelveld.vinkje > span { font-size: .85rem; color: var(--ink); }
+
+@media (max-width: 520px) {
+  .autovgl { grid-template-columns: 1fr; }
+}

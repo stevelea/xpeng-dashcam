@@ -30,6 +30,12 @@
     "url": "",
     "volgorde": []
   },
+  "evconduit": {
+    "url": "",
+    "sleutel": "",
+    "marge_s": 180,
+    "aan": true
+  },
   "thuis": {
     "lat": null,
     "lon": null,
