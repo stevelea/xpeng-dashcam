@@ -12,6 +12,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
    het Nederlands: liever een Nederlands woord dan een lege plek. */
 const TAALEN = {
   settings: 'Settings', close: 'Close', save: 'Save', test: 'Test folder',
+  test_link: 'Test folder', prev_short: '← previous', close_short: 'Close',
   folder_label: 'Folder with your dashcam files',
   folder_hint: 'Sub-folders are included automatically. A year/month layout is not required.',
   folder_normal: 'Sub-folder for normal recordings',
@@ -37,6 +38,38 @@ const TAALEN = {
   days: 'days', until: 'to',
   nothing_indexed: 'nothing indexed yet',
   nothing_found: 'No recognisable file names found.',
+
+  // Tekst die de code zelf opbouwt, dus niet in de HTML staat.
+  trips_clips: '{n} trips · {m} clips', clips_n: '{n} clips',
+  km_unknown: '– km',
+  no_trips: 'No trips on this day.', no_clips: 'No clips.',
+  footage_day: 'Clips from this day', footage_trip: 'Clips from this trip',
+  trip_range: '{a} to {b}',
+  track_measured: 'measured track', track_rebuilt: 'reconstructed',
+  place_known: 'known place', place_assumed: 'assumed place',
+  measuring: 'measuring…', determining: 'determining…',
+  measure_failed: 'Measuring failed: {e}',
+  route_failed: 'Building the route failed: {e}',
+  pick_date_first: 'Pick a date first.', searching: 'searching…',
+  around: 'Around {date} {time}', found_footage: 'Footage found',
+  emergency_title: 'Emergency clips', error_n: 'Error: {e}',
+  points_n: '{n} points', no_route_points: 'scattered points, no route',
+  no_location: 'no location known',
+  track_km: 'measured track · {n} km',
+  track_road: 'reconstructed · {n} km by road',
+  track_assumed: ' · start/end assumed',
+  trip_missing: 'Trip {n} does not exist (any more).',
+  no_known_places: "No known places for this trip. Photos from that moment or a read sign can fill this in.",
+  avg_kmh: '{n} km/h average', camera_front: 'Front', camera_360: '360',
+  emergency_tag: 'emergency clip · ', emergency_badge: 'emergency',
+  no_image: 'no image yet',
+  clips_found: '{n} clips found',
+  nothing_then: 'Nothing found. The car was probably stationary then.',
+  unknown_place: 'unknown place',
+  on_day_at: '{day} at {time}', view_trip: 'view the trip',
+  emergency_note: 'Clips the car saved as an incident itself.',
+  day_clips: '{n} clips · {gb} GB',
+  day_clips_emerg: '{n} clips, {e} emergency · {gb} GB',
 };
 const TAALNL = {
   need_folder: 'Vul eerst een map in.',
@@ -46,13 +79,47 @@ const TAALNL = {
   nothing_indexed: 'nog niets geïndexeerd',
   found: '{n} bruikbare clips gevonden in {where}.',
   nothing_found: 'Geen herkenbare bestandsnamen gevonden.',
+  test_link: 'Map testen', prev_short: '← vorige',
+  trips_clips: '{n} ritten · {m} opnames', clips_n: '{n} opnames',
+  km_unknown: '– km',
+  no_trips: 'Geen ritten op deze dag.', no_clips: 'Geen opnames.',
+  footage_day: 'Beelden van deze dag', footage_trip: 'Beelden van deze rit',
+  trip_range: '{a} tot {b}',
+  track_measured: 'gemeten spoor', track_rebuilt: 'gereconstrueerd',
+  place_known: 'bekende plek', place_assumed: 'aangenomen plek',
+  measuring: 'meten…', determining: 'bepalen…',
+  measure_failed: 'Meten mislukt: {e}',
+  route_failed: 'Route bepalen mislukt: {e}',
+  pick_date_first: 'Kies eerst een datum.', searching: 'zoeken…',
+  around: 'Rond {date} {time}', found_footage: 'Gevonden beelden',
+  emergency_title: 'Noodopnames', error_n: 'Fout: {e}',
+  points_n: '{n} punten', no_route_points: 'losse punten, geen route',
+  no_location: 'geen locatie bekend',
+  track_km: 'gemeten spoor · {n} km',
+  track_road: 'gereconstrueerd · {n} km over de weg',
+  track_assumed: ' · begin/eind aangenomen',
+  trip_missing: 'Rit {n} bestaat niet (meer).',
+  no_known_places: "Geen bekende plekken bij deze rit. Foto's van dat moment of een afgelezen bord kunnen dit vullen.",
+  avg_kmh: '{n} km/h gemiddeld', camera_front: 'Voor', camera_360: '360',
+  emergency_tag: 'noodopname · ', emergency_badge: 'noodgeval',
+  no_image: 'nog geen beeld',
+  clips_found: '{n} opnames gevonden',
+  nothing_then: 'Niets gevonden. De auto stond toen waarschijnlijk stil.',
+  unknown_place: 'onbekende plek',
+  on_day_at: '{day} om {time}', view_trip: 'bekijk de rit',
+  emergency_note: 'Opnames die de auto zelf als incident bewaarde.',
+  day_clips: '{n} clips · {gb} GB',
+  day_clips_emerg: '{n} clips, {e} noodgeval · {gb} GB',
 };
 
 let taal = localStorage.getItem('dashcam-taal') || 'nl';
 
-function t(sleutel) {
-  if (taal === 'en') return TAALEN[sleutel] ?? TAALNL[sleutel] ?? sleutel;
-  return TAALNL[sleutel] ?? TAALEN[sleutel] ?? sleutel;
+function t(sleutel, waarden) {
+  const ruw = taal === 'en'
+    ? (TAALEN[sleutel] ?? TAALNL[sleutel] ?? sleutel)
+    : (TAALNL[sleutel] ?? TAALEN[sleutel] ?? sleutel);
+  if (!waarden) return ruw;
+  return ruw.replace(/{(\w+)}/g, (_, k) => waarden[k] ?? `{${k}}`);
 }
 
 function taalToepassen() {
@@ -162,8 +229,10 @@ function kalenderTekenen() {
     if (iso === state.dag) klas.push('actief');
     if (iso === vandaag) klas.push('vandaag');
     const titel = info
-      ? `${info.n} clips${info.noodgeval ? `, ${info.noodgeval} noodgeval` : ''} · ${nf(info.gb, 1)} GB`
-      : 'geen opnames';
+      ? info.noodgeval
+        ? t('day_clips_emerg', { n: info.n, e: info.noodgeval, gb: nf(info.gb, 1) })
+        : t('day_clips', { n: info.n, gb: nf(info.gb, 1) })
+      : t('no_clips');
     html += `<button class="${klas.join(' ')}" data-day="${iso}"${info ? '' : ' disabled'}
       title="${titel}">${d}</button>`;
   }
@@ -191,8 +260,8 @@ async function dagKiezen(dag) {
   if (kal.jaar !== j || kal.maand !== m) maandTonen(j, m); else kalenderTekenen();
 
   $('#dagtitel').textContent = longDay(dag);
-  $('#dagritten').innerHTML = '<div class="muted">laden…</div>';
-  $('#beeldenkop').textContent = 'Beelden van deze dag';
+  $('#dagritten').innerHTML = `<div class="muted">${t('loading')}</div>`;
+  $('#beeldenkop').textContent = t('footage_day');
   $('#grid').innerHTML = '';
 
   const [ritten, dagdata] = await Promise.all([
@@ -200,26 +269,26 @@ async function dagKiezen(dag) {
     api(`api/day/${dag}`),
   ]);
 
-  $('#dagtelling').textContent = `${ritten.trips.length} ritten · ${dagdata.moments.length} opnames`;
+  $('#dagtelling').textContent = t('trips_clips', { n: ritten.trips.length, m: dagdata.moments.length });
   ritLijstTekenen(ritten.trips);
-  $('#beeldentelling').textContent = `${dagdata.moments.length} opnames`;
+  $('#beeldentelling').textContent = t('clips_n', { n: dagdata.moments.length });
   rasterTekenen(dagdata.moments, false);
 }
 
 async function ritLijstTekenen(ritten) {
   const el = $('#dagritten');
   if (!ritten.length) {
-    el.innerHTML = '<div class="muted">Geen ritten op deze dag.</div>';
+    el.innerHTML = `<div class="muted">${t('no_trips')}</div>`;
     return;
   }
   const soorten = await Promise.all(ritten.map(t =>
     api(`api/trip/${t.id}/route`).then(r => r.geojson ? r.soort : 'geen').catch(() => 'geen')));
 
-  el.innerHTML = ritten.map((t, i) => `<button class="dagrit" data-id="${t.id}">
+  el.innerHTML = ritten.map((rit, i) => `<button class="dagrit" data-id="${rit.id}">
       <span class="lijn ${soorten[i]}"></span>
-      <span class="tijd">${t.start_time}–${t.end_time}</span>
-      <span class="km${t.km === null ? ' onbekend' : ''}">${t.km === null ? '– km' : nf(t.km) + ' km'}</span>
-      <span class="duur">${t.minutes} min · ${t.clips} clips</span>
+      <span class="tijd">${rit.start_time}–${rit.end_time}</span>
+      <span class="km${rit.km === null ? ' onbekend' : ''}">${rit.km === null ? t('km_unknown') : nf(rit.km) + ' km'}</span>
+      <span class="duur">${rit.minutes} min · ${rit.clips} clips</span>
     </button>`).join('');
   $$('.dagrit', el).forEach(b => b.onclick = () => ritOpenen(+b.dataset.id));
 }
@@ -240,16 +309,16 @@ $('#btn-ritdicht').onclick = () => {
 async function ritOpenen(id, scrollen = true) {
   state.rit = id;
   const d = await api(`api/trip/${id}/fragmenten`);
-  const t = d.trip;
+  const rit = d.trip;   // niet `t`: dat is de vertaalfunctie
 
   $('#ritkaart').classList.remove('hidden');
-  $('#rittitel').textContent = `${t.start_time} tot ${t.end_time}`;
-  $('#beeldenkop').textContent = `Beelden van deze rit`;
-  $('#beeldentelling').textContent = `${d.fragmenten.length} opnames`;
+  $('#rittitel').textContent = t('trip_range', { a: rit.start_time, b: rit.end_time });
+  $('#beeldenkop').textContent = t('footage_trip');
+  $('#beeldentelling').textContent = t('clips_n', { n: d.fragmenten.length });
 
   $$('.dagrit').forEach(b => b.classList.toggle('actief', +b.dataset.id === id));
-  rasterTekenen(d.fragmenten.map(f => ({ ...f, day: t.day })), false);
-  await ritRouteTekenen(id, t);
+  rasterTekenen(d.fragmenten.map(f => ({ ...f, day: rit.day })), false);
+  await ritRouteTekenen(id, rit);
   // alleen meebewegen als je zelf een rit aanklikt; bij een directe link blijf je bovenaan
   if (scrollen) $('#ritkaart').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -270,10 +339,10 @@ async function ritRouteTekenen(id, trip) {
     const legenda = L.control({ position: 'bottomleft' });
     legenda.onAdd = () => {
       const el = L.DomUtil.create('div', 'kaartlegenda');
-      el.innerHTML = '<div><i></i>gemeten spoor</div>'
-        + '<div><i class="gereconstrueerd"></i>gereconstrueerd</div>'
-        + '<div><i class="punt"></i>bekende plek</div>'
-        + '<div><i class="punt aangenomen"></i>aangenomen plek</div>';
+      el.innerHTML = `<div><i></i>${t('track_measured')}</div>`
+        + `<div><i class="gereconstrueerd"></i>${t('track_rebuilt')}</div>`
+        + `<div><i class="punt"></i>${t('place_known')}</div>`
+        + `<div><i class="punt aangenomen"></i>${t('place_assumed')}</div>`;
       return el;
     };
     legenda.addTo(ritmap);
@@ -377,11 +446,11 @@ function beginEindMerk(coords, laag) {
     beginEindMerk(rij, ritlaag);
     const aangenomen = punten.some(p => p.source === 'aangenomen');
     merk.textContent = gemeten
-      ? `gemeten spoor · ${nf(d.km)} km`
-      : `gereconstrueerd · ${nf(d.km)} km over de weg${aangenomen ? ' · begin/eind aangenomen' : ''}`;
+      ? t('track_km', { n: nf(d.km) })
+      : t('track_road', { n: nf(d.km) }) + (aangenomen ? t('track_assumed') : '');
     merk.className = `routemerk ${d.soort}`;
   } else {
-    merk.textContent = punten.length ? 'losse punten, geen route' : 'geen locatie bekend';
+    merk.textContent = punten.length ? t('no_route_points') : t('no_location');
     merk.className = 'routemerk gereconstrueerd';
   }
 
@@ -402,29 +471,28 @@ function beginEindMerk(coords, laag) {
   $('#ritpunten').innerHTML = punten.length
     ? punten.map(p => `<span class="wpchip${p.source === 'aangenomen' ? ' aangenomen' : ''}">
         ${p.ts.slice(11, 16)} ${p.label || 'punt'}<i>${p.source}</i></span>`).join('')
-    : '<span class="muted">Geen bekende plekken bij deze rit. '
-      + 'Foto\'s van dat moment of een afgelezen bord kunnen dit vullen.</span>';
+    : `<span class="muted">${t('no_known_places')}</span>`;
 }
 
 $('#btn-meet').onclick = async ev => {
   if (!state.rit) return;
-  ev.target.disabled = true; ev.target.textContent = 'meten…';
+  ev.target.disabled = true; ev.target.textContent = t('measuring');
   try {
     await api(`api/trip/${state.rit}/measure`, { method: 'POST' });
     await dagKiezen(state.dag);
-  } catch (e) { alert(`Meten mislukt: ${e.message}`); }
-  finally { ev.target.disabled = false; ev.target.textContent = 'Kilometers meten'; }
+  } catch (e) { alert(t('measure_failed', { e: e.message })); }
+  finally { ev.target.disabled = false; ev.target.textContent = t('measure'); }
 };
 
 $('#btn-route').onclick = async ev => {
   if (!state.rit) return;
-  ev.target.disabled = true; ev.target.textContent = 'bepalen…';
+  ev.target.disabled = true; ev.target.textContent = t('determining');
   try {
     await api(`api/trip/${state.rit}/photos`, { method: 'POST' }).catch(() => {});
     await api(`api/trip/${state.rit}/route`, { method: 'POST' });
     await ritOpenen(state.rit);
-  } catch (e) { alert(`Route bepalen mislukt: ${e.message}`); }
-  finally { ev.target.disabled = false; ev.target.textContent = 'Route bepalen'; }
+  } catch (e) { alert(t('route_failed', { e: e.message })); }
+  finally { ev.target.disabled = false; ev.target.textContent = t('build_route'); }
 };
 
 /* ── Beelden ───────────────────────────────────────────────────────────────── */
@@ -432,14 +500,14 @@ function rasterTekenen(momenten, toonDag) {
   state.momenten = momenten;
   const el = $('#grid');
   if (!momenten.length) {
-    el.innerHTML = '<div class="empty">Geen opnames.</div>';
+    el.innerHTML = `<div class="empty">${t('no_clips')}</div>`;
     return;
   }
   el.innerHTML = momenten.map((m, i) => {
     const front = m.views.front || m.views.front_and_360;
     const beeld = front.thumb ? `<img loading="lazy" src="thumb/${front.id}" alt="">`
-                              : '<div class="wait">nog geen beeld</div>';
-    const merk = m.kind === 'noodgeval' ? '<div class="badge emer">noodgeval</div>'
+                              : `<div class="wait">${t('no_image')}</div>`;
+    const merk = m.kind === 'noodgeval' ? `<div class="badge emer">${t('emergency_badge')}</div>`
                : (m.views.front_and_360 ? '<div class="badge">360</div>' : '');
     const kmh = m.kmh === undefined ? ''
       : `<span class="kmh${m.kmh === 0 ? ' stil' : ''}">${m.kmh} km/h</span>`;
@@ -466,11 +534,11 @@ function clipTonen() {
   const m = state.momenten[state.open];
   const clip = m.views[state.view] || Object.values(m.views)[0];
   $('#p-title').textContent = `${longDay(m.day || state.dag)} — ${m.time}`;
-  const snelheid = m.kmh === undefined ? '' : ` · ${m.kmh} km/h gemiddeld`;
+  const snelheid = m.kmh === undefined ? '' : ' · ' + t('avg_kmh', { n: m.kmh });
   $('#p-sub').textContent =
-    `${m.kind === 'noodgeval' ? 'noodopname · ' : ''}${nf(clip.mb, 0)} MB${snelheid}`;
+    `${m.kind === 'noodgeval' ? t('emergency_tag') : ''}${nf(clip.mb, 0)} MB${snelheid}`;
   $('#p-views').innerHTML = Object.keys(m.views).map(v =>
-    `<button data-v="${v}" class="${v === state.view ? 'active' : ''}">${v === 'front' ? 'Voor' : '360'}</button>`
+    `<button data-v="${v}" class="${v === state.view ? 'active' : ''}">${v === 'front' ? t('camera_front') : t('camera_360')}</button>`
   ).join('');
   $$('#p-views button').forEach(b => b.onclick = () => { state.view = b.dataset.v; clipTonen(); });
   $('#p-download').href = `download/${clip.id}`;
@@ -505,21 +573,21 @@ document.addEventListener('keydown', ev => {
 /* ── Zoeken op tijd ────────────────────────────────────────────────────────── */
 $('#btn-search').onclick = async () => {
   const datum = $('#s-date').value, tijd = $('#s-time').value || '12:00';
-  if (!datum) { $('#searchinfo').textContent = 'Kies eerst een datum.'; return; }
-  $('#searchinfo').textContent = 'zoeken…';
+  if (!datum) { $('#searchinfo').textContent = t('pick_date_first'); return; }
+  $('#searchinfo').textContent = t('searching');
   try {
     const r = await api(`api/search?ts=${datum}T${tijd}&window_min=30`);
     $('#searchinfo').textContent = r.moments.length
-      ? `${r.moments.length} opnames gevonden`
-      : 'Niets gevonden. De auto stond toen waarschijnlijk stil.';
+      ? t('clips_found', { n: r.moments.length })
+      : t('nothing_then');
     ritSluiten();
-    $('#dagtitel').textContent = `Rond ${datum} ${tijd}`;
+    $('#dagtitel').textContent = t('around', { date: datum, time: tijd });
     $('#dagtelling').textContent = '';
     $('#dagritten').innerHTML = '';
-    $('#beeldenkop').textContent = 'Gevonden beelden';
-    $('#beeldentelling').textContent = `${r.moments.length} opnames`;
+    $('#beeldenkop').textContent = t('found_footage');
+    $('#beeldentelling').textContent = t('clips_n', { n: r.moments.length });
     rasterTekenen(r.moments, true);
-  } catch (e) { $('#searchinfo').textContent = `Fout: ${e.message}`; }
+  } catch (e) { $('#searchinfo').textContent = t('error_n', { e: e.message }); }
 };
 
 /* ── Noodopnames ───────────────────────────────────────────────────────────── */
@@ -540,12 +608,11 @@ $('#btn-nood').onclick = async ev => {
   }
   alles.sort((a, b) => b.ts.localeCompare(a.ts));
   ritSluiten();
-  $('#dagtitel').textContent = 'Noodopnames';
-  $('#dagtelling').textContent = `${alles.length} opnames`;
-  $('#dagritten').innerHTML =
-    '<div class="muted">Opnames die de auto zelf als incident bewaarde.</div>';
-  $('#beeldenkop').textContent = 'Noodopnames';
-  $('#beeldentelling').textContent = `${alles.length} opnames`;
+  $('#dagtitel').textContent = t('emergency_title');
+  $('#dagtelling').textContent = t('clips_n', { n: alles.length });
+  $('#dagritten').innerHTML = `<div class="muted">${t('emergency_note')}</div>`;
+  $('#beeldenkop').textContent = t('emergency_title');
+  $('#beeldentelling').textContent = t('clips_n', { n: alles.length });
   rasterTekenen(alles, true);
   ev.target.disabled = false;
 };
@@ -584,7 +651,7 @@ async function locatiesLaden() {
 
   if (groot.laag) groot.map.removeLayer(groot.laag);
   groot.laag = L.layerGroup().addTo(groot.map);
-  $('#kaart-telling').textContent = `${d.punten.length} punten`;
+  $('#kaart-telling').textContent = t('points_n', { n: d.punten.length });
   if (!d.punten.length) return;
 
   const punten = [];
@@ -593,8 +660,8 @@ async function locatiesLaden() {
     L.circleMarker([p.lat, p.lon], {
       radius: 6, weight: 2, color: '#b08334', fillColor: '#d4a857', fillOpacity: .75,
     }).addTo(groot.laag).bindPopup(
-      `<b>${p.label || 'onbekende plek'}</b><br>${p.day} om ${p.ts.slice(11, 16)}`
-      + `<br><a href="#" onclick="naarRit('${p.day}',${p.trip_id});return false">bekijk de rit</a>`);
+      `<b>${p.label || t('unknown_place')}</b><br>${t('on_day_at', { day: p.day, time: p.ts.slice(11, 16) })}`
+      + `<br><a href="#" onclick="naarRit('${p.day}',${p.trip_id});return false">${t('view_trip')}</a>`);
   }
   groot.map.fitBounds(L.latLngBounds(punten).pad(0.15));
 }
@@ -643,7 +710,7 @@ async function overzichtLaden() {
       const t = await api(`api/trip/${rit}`);
       await dagKiezen(t.day);
       await ritOpenen(+rit, false);
-    } catch { $('#subtitle').textContent = `Rit ${rit} bestaat niet (meer).`; }
+    } catch { $('#subtitle').textContent = t('trip_missing', { n: rit }); }
   }
   $('#s-date').value = o.last_day || '';
   $('#s-date').min = o.first_day || '';
