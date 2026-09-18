@@ -500,20 +500,72 @@ async function ritRouteTekenen(id, trip) {
     const legenda = L.control({ position: 'bottomleft' });
     legenda.onAdd = () => {
       const el = L.DomUtil.create('div', 'kaartlegenda');
-      el.innerHTML = '<div><i></i>gemeten spoor</div>'
-        + '<div><i class="gereconstrueerd"></i>gereconstrueerd</div>'
-        + '<div><i class="punt"></i>bekende plek</div>'
-        + '<div><i class="punt aangenomen"></i>aangenomen plek</div>'
-        + '<div><i class="auto"></i>spoor van de auto</div>';
+      // De blauwe lijn van de auto hoort er ook bij: zonder deze regel is niet te
+      // zien van wie dat spoor is. (De eerste opzet zette hem er wel in, maar werd
+      // meteen overschreven.)
       el.innerHTML = `<div><i></i>${t('track_measured')}</div>`
         + `<div><i class="gereconstrueerd"></i>${t('track_rebuilt')}</div>`
         + `<div><i class="punt"></i>${t('place_known')}</div>`
-        + `<div><i class="punt aangenomen"></i>${t('place_assumed')}</div>`;
+        + `<div><i class="punt aangenomen"></i>${t('place_assumed')}</div>`
+        + `<div><i class="auto"></i>${t('spoor_title')}</div>`;
       return el;
     };
     legenda.addTo(ritmap);
   }
   if (ritlaag) { ritmap.removeLayer(ritlaag); ritlaag = null; }
+
+  ritlaag = L.layerGroup().addTo(ritmap);
+  setTimeout(() => ritmap.invalidateSize(), 60);
+
+  const punten = d.punten || [];
+  let grenzen = null;
+
+  if (d.geojson) {
+    const gemeten = d.soort === 'gemeten';
+    // Een donkere onderlaag onder de lijn: anders verdwijnt hij in de kaart zodra
+    // er wegen of water onder liggen.
+    L.geoJSON(d.geojson, {
+      style: { color: 'rgba(0,0,0,.45)', weight: gemeten ? 9 : 8, opacity: 1 },
+    }).addTo(ritlaag);
+    const lijn = L.geoJSON(d.geojson, {
+      style: { color: gemeten ? '#4cbf54' : '#f0bf63', weight: gemeten ? 5 : 5,
+               opacity: 1, dashArray: gemeten ? null : '10 8', lineCap: 'round' },
+    }).addTo(ritlaag);
+    grenzen = lijn.getBounds();
+    // richting: pijlen op de lijn plus een A en een B aan de uiteinden
+    const rij = (d.geojson.coordinates || []).map(c => [c[1], c[0]]);
+    pijlenLangs(rij, ritlaag, gemeten ? '#4cbf54' : '#f0bf63');
+    beginEindMerk(rij, ritlaag);
+    const aangenomen = punten.some(p => p.source === 'aangenomen');
+    merk.textContent = gemeten
+      ? t('track_km', { n: nf(d.km) })
+      : t('track_road', { n: nf(d.km) }) + (aangenomen ? t('track_assumed') : '');
+    merk.className = `routemerk ${d.soort}`;
+  } else {
+    merk.textContent = punten.length ? t('no_route_points') : t('no_location');
+    merk.className = 'routemerk gereconstrueerd';
+  }
+
+  const cirkels = [];
+  for (const p of punten) {
+    cirkels.push([p.lat, p.lon]);
+    // een aangenomen punt is hol: je ziet meteen dat het geredeneerd is, niet gemeten
+    const aangenomen = p.source === 'aangenomen';
+    L.circleMarker([p.lat, p.lon], {
+      radius: 7, weight: 3, color: aangenomen ? '#f0bf63' : '#1a1a1a',
+      fillColor: aangenomen ? 'transparent' : '#f0bf63',
+      fillOpacity: aangenomen ? 0 : 1, dashArray: aangenomen ? '3 3' : null,
+    }).addTo(ritlaag).bindPopup(`<b>${p.label || 'punt'}</b><br>${p.ts.slice(11, 16)} · ${p.source}`);
+  }
+  if (!grenzen && cirkels.length) grenzen = L.latLngBounds(cirkels);
+  ritgrenzen = grenzen;
+  if (grenzen) ritmap.fitBounds(grenzen.pad(0.25));
+
+  $('#ritpunten').innerHTML = punten.length
+    ? punten.map(p => `<span class="wpchip${p.source === 'aangenomen' ? ' aangenomen' : ''}">
+        ${p.ts.slice(11, 16)} ${p.label || 'punt'}<i>${p.source}</i></span>`).join('')
+    : `<span class="muted">${t('no_known_places')}</span>`;
+}
 
 // ── Richting op de lijn ───────────────────────────────────────────────────────
 // Een lijn zonder pijlen laat niet zien welke kant je op reed. Leaflet kan dat niet
@@ -586,59 +638,6 @@ function beginEindMerk(coords, laag) {
   }).addTo(laag);
   maak(coords[0], 'A', '#4cbf54');
   maak(coords[coords.length - 1], 'B', '#e0574f');
-}
-
-  ritlaag = L.layerGroup().addTo(ritmap);
-  setTimeout(() => ritmap.invalidateSize(), 60);
-
-  const punten = d.punten || [];
-  let grenzen = null;
-
-  if (d.geojson) {
-    const gemeten = d.soort === 'gemeten';
-    // Een donkere onderlaag onder de lijn: anders verdwijnt hij in de kaart zodra
-    // er wegen of water onder liggen.
-    L.geoJSON(d.geojson, {
-      style: { color: 'rgba(0,0,0,.45)', weight: gemeten ? 9 : 8, opacity: 1 },
-    }).addTo(ritlaag);
-    const lijn = L.geoJSON(d.geojson, {
-      style: { color: gemeten ? '#4cbf54' : '#f0bf63', weight: gemeten ? 5 : 5,
-               opacity: 1, dashArray: gemeten ? null : '10 8', lineCap: 'round' },
-    }).addTo(ritlaag);
-    grenzen = lijn.getBounds();
-    // richting: pijlen op de lijn plus een A en een B aan de uiteinden
-    const rij = (d.geojson.coordinates || []).map(c => [c[1], c[0]]);
-    pijlenLangs(rij, ritlaag, gemeten ? '#4cbf54' : '#f0bf63');
-    beginEindMerk(rij, ritlaag);
-    const aangenomen = punten.some(p => p.source === 'aangenomen');
-    merk.textContent = gemeten
-      ? t('track_km', { n: nf(d.km) })
-      : t('track_road', { n: nf(d.km) }) + (aangenomen ? t('track_assumed') : '');
-    merk.className = `routemerk ${d.soort}`;
-  } else {
-    merk.textContent = punten.length ? t('no_route_points') : t('no_location');
-    merk.className = 'routemerk gereconstrueerd';
-  }
-
-  const cirkels = [];
-  for (const p of punten) {
-    cirkels.push([p.lat, p.lon]);
-    // een aangenomen punt is hol: je ziet meteen dat het geredeneerd is, niet gemeten
-    const aangenomen = p.source === 'aangenomen';
-    L.circleMarker([p.lat, p.lon], {
-      radius: 7, weight: 3, color: aangenomen ? '#f0bf63' : '#1a1a1a',
-      fillColor: aangenomen ? 'transparent' : '#f0bf63',
-      fillOpacity: aangenomen ? 0 : 1, dashArray: aangenomen ? '3 3' : null,
-    }).addTo(ritlaag).bindPopup(`<b>${p.label || 'punt'}</b><br>${p.ts.slice(11, 16)} · ${p.source}`);
-  }
-  if (!grenzen && cirkels.length) grenzen = L.latLngBounds(cirkels);
-  ritgrenzen = grenzen;
-  if (grenzen) ritmap.fitBounds(grenzen.pad(0.25));
-
-  $('#ritpunten').innerHTML = punten.length
-    ? punten.map(p => `<span class="wpchip${p.source === 'aangenomen' ? ' aangenomen' : ''}">
-        ${p.ts.slice(11, 16)} ${p.label || 'punt'}<i>${p.source}</i></span>`).join('')
-    : `<span class="muted">${t('no_known_places')}</span>`;
 }
 
 /* ── Gegevens van de auto (EVConduit) ──────────────────────────────────────── */
@@ -785,7 +784,9 @@ function autoTekenen(d, trip) {
   h += spoorBlok(d.spoor);
   vak.innerHTML = h;
 
-  spoorTekenen(d.spoor);
+  // Een fout in de kaartlaag mag het paneel niet onbruikbaar maken: de gegevens
+  // van de auto staan er dan al, en de verversknop moet blijven werken.
+  try { spoorTekenen(d.spoor); } catch (e) { console.error('spoor tekenen mislukt', e); }
   autoKnop(trip);
 }
 
@@ -1092,11 +1093,46 @@ async function overzichtLaden() {
   //   ?dag=2026-07-02&tijd=17:35&venster=90
   const tijd = q.get('tijd') || q.get('time');
   const venster = +(q.get('venster') || q.get('window') || ZOEK_VENSTER);
+  // En de nieuwere vorm, vanuit EVConduit: de begin- en eindtijd van de rit zelf,
+  // als muurklok op `dag`. Dat wijst een rit aan, geen zoekvenster; tijd/venster
+  // blijft dan alleen de terugval, voor een viewer die van/tot niet kent.
+  //   ?dag=2026-07-02&van=17:26:58&tot=17:41:00
+  const van = q.get('van'), tot = q.get('tot');
 
   // Vul het zoekformulier eerst, zodat een deeplink daarop voortbouwt.
   $('#s-date').value = o.last_day || '';
   $('#s-date').min = o.first_day || '';
   $('#s-date').max = o.last_day || '';
+
+  // Een ritnummer is met opzet die rit; die wint van een tijdvenster.
+  if (rit) {
+    try {
+      const ritData = await api(`api/trip/${rit}`);
+      await dagKiezen(ritData.day);
+      await ritOpenen(+rit, false);
+    } catch { $('#subtitle').textContent = t('trip_missing', { n: rit }); }
+    return;
+  }
+
+  // van/tot noemt de rit zelf. Lukt het niet die te vinden — de twee apps hebben de
+  // dag dan anders ingedeeld — dan is zoeken rond tijd/venster het eerlijke
+  // antwoord en geen gok. Zonder `dag` is er geen moment om op te zoeken.
+  if (van && tot && q.get('dag')) {
+    // Alleen de opzoeking zelf mag stil mislukken — onbekende dag, onzin-tijden —
+    // want dan is tijd/venster de terugval. Een fout bij het openen van de gevonden
+    // rit hoort hier NIET in te verdwijnen: dan zou de kaart meteen weer sluiten en
+    // lijkt het of de link niets deed, terwijl de rit wel gevonden was.
+    let m = null;
+    try {
+      m = await api(`api/trips/${dag}/bij?van=${encodeURIComponent(van)}`
+                    + `&tot=${encodeURIComponent(tot)}`);
+    } catch { /* onbruikbare link: valt terug op tijd/venster hieronder */ }
+    if (m && m.trip) {
+      await dagKiezen(dag);
+      await ritOpenen(m.trip, false);
+      return;
+    }
+  }
 
   if (tijd) {
     // Zoeken kan op zichzelf staan; de dag wordt er toch bij gezocht.
@@ -1105,13 +1141,6 @@ async function overzichtLaden() {
   } else if (dag) {
     maandTonen(+dag.slice(0, 4), +dag.slice(5, 7) - 1);
     await dagKiezen(dag);
-  }
-  if (rit) {
-    try {
-      const ritData = await api(`api/trip/${rit}`);
-      await dagKiezen(ritData.day);
-      await ritOpenen(+rit, false);
-    } catch { $('#subtitle').textContent = t('trip_missing', { n: rit }); }
   }
 }
 

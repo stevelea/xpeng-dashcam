@@ -45,6 +45,59 @@ for naam in sorted(set(re.findall(r'\b([a-zA-Z][a-zA-Z0-9_]{3,})\(', js))):
         continue
     fouten.append(f'functie {naam}() wordt aangeroepen maar is nergens gedefinieerd')
 
+# ── Functies op de juiste plek ────────────────────────────────────────────────
+# Een functie die tekstueel tussen de accolades van een andere functie staat, ziet
+# er hetzelfde uit maar is van buiten die functie onbereikbaar. Zo belandde
+# pijlenLangs() ooit binnen ritRouteTekenen(): de kaart van de auto riep hem aan,
+# kreeg "is not defined", en de hele rit wilde daarna niet meer openen. Een
+# accoladeteller die strings en commentaar overslaat vindt dat.
+def functiediepten(bron):
+    uit, diepte, i, n, regelbegin = [], 0, 0, len(bron), True
+    while i < n:
+        c = bron[i]
+        if c == '\n':
+            regelbegin, i = True, i + 1
+            continue
+        if regelbegin:
+            if c in ' \t':
+                i += 1
+                continue
+            m = re.match(r'(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(', bron[i:i + 80])
+            if m:
+                uit.append((m.group(1), diepte))
+            regelbegin = False
+        if bron.startswith('//', i):
+            j = bron.find('\n', i)
+            i = n if j < 0 else j
+            continue
+        if bron.startswith('/*', i):
+            j = bron.find('*/', i + 2)
+            i = n if j < 0 else j + 2
+            continue
+        if c in ('"', "'", '`'):
+            i += 1
+            while i < n:
+                if bron[i] == '\\':
+                    i += 2
+                    continue
+                if bron[i] == c:
+                    i += 1
+                    break
+                i += 1
+            continue
+        if c == '{':
+            diepte += 1
+        elif c == '}':
+            diepte -= 1
+        i += 1
+    return uit
+
+
+for naam, diepte in functiediepten(js):
+    if diepte != 0:
+        fouten.append(f'functie {naam}() staat binnen een andere functie '
+                      f'(accoladediepte {diepte}) en is daar niet aanroepbaar')
+
 # ── Woordenlijsten ────────────────────────────────────────────────────────────
 # Een typefout in t('...') levert geen foutmelding op maar de sleutel zelf op het
 # scherm, dus dat moet je zoeken en niet tegenkomen.

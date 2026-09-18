@@ -279,6 +279,103 @@ leeg = evconduit.dag_auto(con, [drie[1]])
 check('geen treffer betekent geen afstand', leeg['102']['km'] is None, leeg['102'])
 check('en zeker is dan onwaar', leeg['102']['zeker'] is False)
 
+# ── 15. Een link met van/tot wijst een rit aan, geen zoekvenster ─────────────
+# docs/xpeng-camera.md §1: EVConduit bouwt de link uit zijn eigen rit, dus van/tot
+# is het venster van de auto als muurklok in ONZE zone op de dag uit de link. Wij
+# zoeken de rit van ons die erop past — dezelfde afweging als bij de ritttegels.
+eigen = [
+    {'id': 201, 'day': '2026-09-14', 'start_ts': '2026-09-14T14:23:00',
+     'end_ts': '2026-09-14T14:41:00', 'clips': 10, 'seconds': 1080, 'km': None,
+     'measured': 0, 'note': None},
+    {'id': 202, 'day': '2026-09-14', 'start_ts': '2026-09-14T16:05:00',
+     'end_ts': '2026-09-14T16:25:00', 'clips': 8, 'seconds': 1200, 'km': None,
+     'measured': 0, 'note': None},
+    {'id': 203, 'day': '2026-09-14', 'start_ts': '2026-09-14T16:00:00',
+     'end_ts': '2026-09-14T16:12:00', 'clips': 6, 'seconds': 720, 'km': None,
+     'measured': 0, 'note': None},
+]
+gevonden = evconduit.rit_bij_venster(eigen, '2026-09-14', '14:23:00', '14:41:00')
+check('van/tot vindt de rit die er precies op past',
+      bool(gevonden) and gevonden['rit']['id'] == 201, gevonden and gevonden['rit']['id'])
+check('en de dekking is 1.0', gevonden and gevonden['dekking'] == 1.0,
+      gevonden and gevonden['dekking'])
+check('de klokafwijking wordt ook hier gemeld',
+      gevonden and gevonden['start_afwijking_s'] == 0 and gevonden['eind_afwijking_s'] == 0,
+      gevonden and (gevonden['start_afwijking_s'], gevonden['eind_afwijking_s']))
+
+gevonden = evconduit.rit_bij_venster(eigen, '2026-09-14', '14:24:30', '14:41:00')
+check('90 seconden klokverschil past nog binnen de marge',
+      bool(gevonden) and gevonden['rit']['id'] == 201,
+      gevonden and gevonden['rit']['id'])
+check('met de afwijking erbij', gevonden and gevonden['start_afwijking_s'] == 90,
+      gevonden and gevonden['start_afwijking_s'])
+
+gevonden = evconduit.rit_bij_venster(eigen, '2026-09-14', '16:05:00', '16:25:00')
+check('de beste van twee overlappende ritten wint',
+      bool(gevonden) and gevonden['rit']['id'] == 202,
+      gevonden and gevonden['rit']['id'])
+
+check('uren later is geen treffer',
+      evconduit.rit_bij_venster(eigen, '2026-09-14', '18:00:00', '18:10:00') is None)
+# Onze rit eindigt 14:41, de link begint 14:44: alleen de marge raakt. Dan is één
+# rit aanwijzen een gok en blijft zoeken rond tijd/venster over.
+check('alleen op de marge raken is geen treffer',
+      evconduit.rit_bij_venster(eigen, '2026-09-14', '14:44:00', '15:00:00') is None)
+
+# De dag uit de link bepaalt het moment: dezelfde kloktijd op een andere dag hoort
+# niet op onze rit van de 14e te passen.
+check('dezelfde kloktijd op een andere dag past niet',
+      evconduit.rit_bij_venster(eigen, '2026-09-15', '14:23:00', '14:41:00') is None)
+
+check('onbruikbare tijden geven geen venster',
+      evconduit._dagvenster('2026-09-14', 'kwart voor drie', '14:41:00') is None)
+check('een omgekeerd venster geeft geen venster',
+      evconduit._dagvenster('2026-09-14', '14:41:00', '14:23:00') is None)
+
+# Wintertijd: dezelfde muurklok is in januari een uur eerder in UTC. Wie de link als
+# UTC leest, vindt hier niets — en dat is precies waar het misgaat.
+winter = [{'id': 301, 'day': '2026-01-14', 'start_ts': '2026-01-14T14:23:00',
+           'end_ts': '2026-01-14T14:41:00', 'clips': 10, 'seconds': 1080, 'km': None,
+           'measured': 0, 'note': None}]
+gevonden = evconduit.rit_bij_venster(winter, '2026-01-14', '14:23:00', '14:41:00')
+check('in de winter wordt de link net zo goed als muurklok gelezen',
+      bool(gevonden) and gevonden['rit']['id'] == 301, gevonden and gevonden['rit']['id'])
+
+# Een tijd met zone in de index (zo schrijft de echte index) moet op zijn eigen
+# offset vergeleken worden, niet opnieuw in de config-zone geplakt. De link is
+# muurklok in de config-zone: 02:56 in Amsterdam is 00:56 UTC, en dat is de rit
+# met +10:00 ook.
+store._config['timezone'] = 'Europe/Amsterdam'
+met_zone = [{'id': 401, 'day': '2026-09-16', 'start_ts': '2026-09-16T10:56:22+10:00',
+             'end_ts': '2026-09-16T11:19:24+10:00', 'clips': 10, 'seconds': 1080,
+             'km': None, 'measured': 0, 'note': None}]
+gevonden = evconduit.rit_bij_venster(met_zone, '2026-09-16', '02:56:22', '03:19:24')
+check('een rit met zone in de index wordt op zijn eigen offset gevonden',
+      bool(gevonden) and gevonden['rit']['id'] == 401, gevonden and gevonden['rit']['id'])
+
+# ── 16. Een negatieve uitkomst is niet voor altijd waar ──────────────────────
+# EVConduit krijgt zijn ritten uit een export die later binnenkomt. Wat vandaag
+# niet matcht, kan morgen wel matchen. Een rit openen moet dan opnieuw kijken in
+# plaats van de oude "geen rit" te blijven tonen — dat is precies waar anders de
+# verversknop voor nodig was.
+store._config['timezone'] = 'Europe/Amsterdam'
+store._config['evconduit'] = {'url': 'https://voorbeeld.test', 'sleutel': 'geheim',
+                              'marge_s': 180, 'aan': True}
+evconduit.vergeet(con)
+met_ritten([])                                     # de export is er nog niet
+d = evconduit.koppel(con, t)
+check('zonder rit in EVConduit: geen treffer', d['reden'] == 'geen_rit', d['reden'])
+met_ritten([auto('2026-09-14T12:23:00Z', '2026-09-14T12:41:00Z')])
+TIJDEN = []
+d = evconduit.koppel(con, t)                       # gewone GET, geen forceer
+check('de export komt binnen: een rit openen kijkt opnieuw',
+      d['beschikbaar'], (d['reden'], TIJDEN))
+check('en haalt daar de rittenlijst voor op',
+      any(u.endswith('/user/xpeng/trips') for u in TIJDEN), TIJDEN)
+TIJDEN = []
+evconduit.koppel(con, t)
+check('een echte treffer blijft wel uit de cache komen', TIJDEN == [], TIJDEN)
+
 con.close()
 print()
 if fouten:
