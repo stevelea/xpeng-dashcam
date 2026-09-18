@@ -197,6 +197,33 @@ try:
 finally:
     evconduit.httpx.get = bewaard
 
+# ── 13. Een link met van/tot wijst de rit zelf aan, geen zoekvenster ─────────
+# docs/xpeng-camera.md §1: van/tot is het venster van de rit van de auto, als
+# muurklok in onze eigen zone op deze dag (hier 14:23 lokaal = 12:23 UTC).
+cli.post('/api/settings', json={'evconduit': {'marge_s': 180}})
+r = cli.get('/api/trips/2026-09-14/bij', params={'van': '14:23:00', 'tot': '14:41:00'})
+d = r.json()
+check('van/tot wijst onze rit aan', r.status_code == 200 and d['trip'] == trip_id, d)
+check('met de dekking erbij', d.get('dekking') == 1.0, d.get('dekking'))
+
+d = cli.get('/api/trips/2026-09-14/bij',
+            params={'van': '14:24:30', 'tot': '14:42:00'}).json()
+check('een kleine klokafwijking past nog', d['trip'] == trip_id, d)
+check('en de afwijking wordt gemeld', d.get('start_afwijking_s') == 90, d)
+
+d = cli.get('/api/trips/2026-09-14/bij',
+            params={'van': '18:00:00', 'tot': '18:10:00'}).json()
+check('geen rit op dat moment geeft trip: null', d['trip'] is None, d)
+
+d = cli.get('/api/trips/2026-09-14/bij',
+            params={'van': 'niet-een-tijd', 'tot': '14:41:00'}).json()
+check('een onbruikbare link geeft geen treffer in plaats van een fout',
+      d['trip'] is None, d)
+
+check('een dag zonder ritten geeft ook niets',
+      cli.get('/api/trips/2020-01-01/bij',
+              params={'van': '14:23:00', 'tot': '14:41:00'}).json()['trip'] is None)
+
 con.close()
 print()
 if fouten:

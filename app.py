@@ -246,6 +246,27 @@ def api_trips_auto(day: str):
     return {'day': day, 'auto': auto}
 
 
+@app.get('/api/trips/{day}/bij')
+def api_trips_bij(day: str, van: str, tot: str):
+    """De rit die een link met van/tot bedoelt — dezelfde vraag als `rit=<id>`.
+
+    Zie docs/xpeng-camera.md §1: van/tot zijn de begin- en eindtijd van de rit van
+    de auto, als muurklok in onze eigen zone op deze dag. Wij zoeken de rit van ons
+    die erop past, met dezelfde marge als waarop de ritttegels de auto koppelen
+    (marge_s). Geen treffer is een gewoon antwoord, geen fout: dan blijft zoeken
+    rond tijd/venster over.
+    """
+    con = store.connect()
+    rows = con.execute('SELECT * FROM trips WHERE day = ? ORDER BY start_ts', (day,)).fetchall()
+    con.close()
+    treffer = evconduit_mod.rit_bij_venster([dict(r) for r in rows], day, van, tot)
+    if not treffer:
+        return {'day': day, 'trip': None}
+    return {'day': day, 'trip': treffer['rit']['id'], 'dekking': treffer['dekking'],
+            'start_afwijking_s': treffer['start_afwijking_s'],
+            'eind_afwijking_s': treffer['eind_afwijking_s']}
+
+
 @app.get('/api/trip/{trip_id}')
 def api_trip(trip_id: int):
     con = store.connect()

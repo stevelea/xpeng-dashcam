@@ -185,6 +185,31 @@ def toets(url='', sleutel=''):
 
 
 # ── Koppelen op tijd ──────────────────────────────────────────────────────────
+def _vergelijk(ons, ander, marge_s):
+    """Het venster van de auto tegen het onze, met de klokmarge eromheen.
+
+    `None` als ze te ver uit elkaar liggen om nog dezelfde rit te kunnen zijn,
+    anders de cijfers waar het om gaat: `dekking` (welk deel van ONZE rit gedekt
+    wordt) en de afwijkingen. Dit is de enige plek waar de twee klokken vergeleken
+    worden: `_kandidaten` zoekt er de rit van de auto bij, `rit_bij_venster` onze
+    rit bij een link.
+    """
+    d_start, d_eind = ons
+    e_start, e_eind = ander
+    if (e_eind < d_start - timedelta(seconds=marge_s)
+            or e_start > d_eind + timedelta(seconds=marge_s)):
+        return None
+    raak = (min(d_eind, e_eind) - max(d_start, e_start)).total_seconds()
+    onze_duur = max(1.0, (d_eind - d_start).total_seconds())
+    return {
+        'dekking': round(max(0.0, raak) / onze_duur, 3),
+        'overlap_s': int(max(0.0, raak)),
+        'start_afwijking_s': int((e_start - d_start).total_seconds()),
+        'eind_afwijking_s': int((e_eind - d_eind).total_seconds()),
+        'duur_auto_s': int((e_eind - e_start).total_seconds()),
+    }
+
+
 def _kandidaten(ons, rijen, marge_s):
     """Ritten van de auto die onze rit kunnen zijn, beste eerst.
 
@@ -197,30 +222,71 @@ def _kandidaten(ons, rijen, marge_s):
       Een constante afwijking is klokverschil; een wisselende is iets anders, en
       dan moet je niet aan elkaar plakken wat niet bij elkaar hoort.
     """
-    d_start, d_eind = ons
-    zoek_van = d_start - timedelta(seconds=marge_s)
-    zoek_tot = d_eind + timedelta(seconds=marge_s)
-    onze_duur = max(1.0, (d_eind - d_start).total_seconds())
-
     uit = []
     for r in rijen:
         e_start, e_eind = _utc(r.get('started_at')), _utc(r.get('ended_at'))
         if e_start is None or e_eind is None:
             continue
-        # Kan deze rit überhaupt binnen het gezochte venster vallen?
-        if e_eind < zoek_van or e_start > zoek_tot:
+        cijfers = _vergelijk(ons, (e_start, e_eind), marge_s)
+        if cijfers is None:
             continue
-        raak = (min(d_eind, e_eind) - max(d_start, e_start)).total_seconds()
-        uit.append({
-            'rit': _dun(r),
-            'dekking': round(max(0.0, raak) / onze_duur, 3),
-            'overlap_s': int(max(0.0, raak)),
-            'start_afwijking_s': int((e_start - d_start).total_seconds()),
-            'eind_afwijking_s': int((e_eind - d_eind).total_seconds()),
-            'duur_auto_s': int((e_eind - e_start).total_seconds()),
-        })
+        uit.append({'rit': _dun(r), **cijfers})
     uit.sort(key=lambda k: (k['overlap_s'], k['dekking']), reverse=True)
     return uit
+
+
+def _dagvenster(dag, van, tot):
+    """Het venster uit een link (`dag` + `van`/`tot`) als UTC.
+
+    De tijden in de link zijn muurklok in onze eigen zone, niet UTC — zie
+    docs/xpeng-camera.md §1. Een onbruikbaar of omgekeerd venster geeft None, en
+    dan valt de pagina terug op zoeken rond `tijd`.
+    """
+    try:
+        begin = datetime.fromisoformat(f'{dag}T{van}')
+        eind = datetime.fromisoformat(f'{dag}T{tot}')
+    except (TypeError, ValueError):
+        return None
+    if begin.tzinfo is not None or eind.tzinfo is not None:
+        return None                       # de link hoort kloktijd te bevatten
+    zone = store.tijdzone()
+    begin, eind = begin.replace(tzinfo=zone), eind.replace(tzinfo=zone)
+    if eind <= begin:
+        return None
+    return begin.astimezone(timezone.utc), eind.astimezone(timezone.utc)
+
+
+def rit_bij_venster(trips, dag, van, tot, marge_s=None):
+    """Welke van ONZE ritten bedoelt een EVConduit-link met `van`/`tot`?
+
+    De link is gebouwd uit de rit van de auto, dus `van`/`tot` is het venster van
+    de auto; wij zoeken de onze erbij. Dat is dezelfde vergelijking als
+    `_kandidaten`, met dezelfde marge, maar dan met de rollen omgekeerd. `van` en
+    `tot` zijn muurklok in onze eigen zone op de dag uit de link.
+
+    Geeft de beste rit terug als die genoeg van ons venster dekt (`ZEKER_VANAF`),
+    anders None. Dan is zoeken rond `tijd` het eerlijke antwoord: de twee apps
+    hebben de dag kennelijk anders ingedeeld en één rit aanwijzen zou een gok zijn.
+    """
+    venster = _dagvenster(dag, van, tot)
+    if venster is None:
+        return None
+    if marge_s is None:
+        marge_s = instellingen()['marge_s']
+
+    kandidaten = []
+    for t in trips:
+        ons = _ons_venster(t)
+        if ons is None:
+            continue
+        cijfers = _vergelijk(ons, venster, marge_s)
+        if cijfers is None:
+            continue
+        kandidaten.append({'rit': t, **cijfers})
+    if not kandidaten:
+        return None
+    kandidaten.sort(key=lambda k: (k['overlap_s'], k['dekking']), reverse=True)
+    return kandidaten[0] if kandidaten[0]['dekking'] >= ZEKER_VANAF else None
 
 
 # De velden die we bewaren. `user_id` en `export_id` gaan eruit: die zeggen de
@@ -320,11 +386,20 @@ def _compleet(rij, met_spoor):
     afstand nodig en een spoor kost een verzoek per rit. Met spoor moet het ook
     echt geprobeerd zijn, anders zou een rit die eerst voor de tegel is opgehaald
     daarna voor altijd "geen spoor" blijven tonen.
+
+    En "geen rit op dat moment" is geen eindstand. EVConduit krijgt zijn ritten uit
+    een export die later binnenkomt, dus wat gisteren niet matchte kan vandaag wel
+    matchen. Wie één rit opent, laat daarom opnieuw kijken: anders blijft zo'n oude
+    negatieve uitkomst staan tot iemand de verversknop vindt. De ritttegels (zonder
+    spoor) blijven de cache wél vertrouwen, zodat een dag kiezen geen netwerkverzoek
+    per keer kost.
     """
     if not met_spoor:
         return True
-    if rij['twijfel'] or not rij['rit']:
+    if rij['twijfel']:
         return True
+    if not rij['rit']:
+        return False
     bewaard = json.loads(rij['spoor']) if rij['spoor'] else {}
     return bool(bewaard.get('spoor_opgehaald'))
 
