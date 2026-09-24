@@ -40,6 +40,21 @@ clip as a thumbnail.*
 - **Download** any clip.
 - **Light and dark theme**, and a **Dutch / English** switch that remembers your choice.
 
+### New in v0.3
+
+Contributed by [Steve Lea](https://github.com/stevelea) — thank you:
+
+- **Docker.** A `Dockerfile` and `docker-compose.yml`, so the viewer runs on a NAS or
+  home server without installing Python or ffmpeg. See *Run it with Docker* below.
+- **Linux fix.** Reading the on-screen speed used a macOS-only decoder flag; on Linux it
+  silently read nothing (no distances, no hard braking). It now picks the decoder per
+  platform. Also: a changed time zone applies without a restart, and saving the settings
+  no longer fails when no backup copy can be written.
+- **English mode** is complete: strings built in code, the calendar and the map legend
+  now follow the language switch.
+- **Deep links to a moment:** `?dag=2026-07-02&tijd=17:33&venster=10`. See
+  [DEEPLINK.md](DEEPLINK.md).
+
 ### New in v0.2
 
 - **Hard braking.** The dashcam has no G-sensor in its files, so the app reads the
@@ -74,6 +89,19 @@ These need something outside the app and are switched off unless you configure t
 - **Reminder.** A script that notifies you when the archive falls behind, so new trips do
   not pile up unmatched.
 
+### Link straight to a moment
+
+The viewer takes a few URL parameters, so another app — a trip log, say — can link
+directly to the clips for a moment rather than to a calendar:
+
+```
+?dag=2026-07-02&tijd=17:33&venster=10      # 17:33 ± 10 minutes
+```
+
+`tijd` is the centre of the window and `venster` its half-width in minutes. `?dag=` on
+its own opens the usual day view. See **[DEEPLINK.md](DEEPLINK.md)** for the parameters,
+copy-paste helpers in JavaScript and Python, and the time-zone pitfall to avoid.
+
 ---
 
 ## Requirements
@@ -84,6 +112,7 @@ These need something outside the app and are switched off unless you configure t
 | ffmpeg | required for thumbnails and for reading the speed |
 | Disk | roughly 1 % of your footage size, for thumbnails and the index |
 | OS | macOS and Linux. Windows is untested. |
+| Docker | optional, for the container route — see below |
 
 The app itself needs only three Python packages: `fastapi`, `uvicorn` and `httpx`.
 
@@ -121,6 +150,43 @@ the footage was taken. Because blurring destroys the on-screen speed digits, the
 day carries its distances as stored values instead of reading them from the image.
 For the same reason the demo's hard-braking moment is an **example**: its numbers are
 invented, only the clip is really cut from the demo footage.
+
+---
+
+## Run it with Docker
+
+Prefer a container? The image carries Python and ffmpeg, so nothing is installed on the
+host — handy on a NAS or home server that is always on.
+
+```bash
+cp config.example.json config.json     # then set "root" to /footage
+# and put your own footage folder on the left of ":/footage:ro" in docker-compose.yml
+docker compose up -d --build
+```
+
+The viewer is empty until you build the index, exactly as with the venv workflow:
+
+```bash
+docker compose run --rm app python scan.py      # find the clips
+docker compose run --rm app python thumbs.py    # make the thumbnails
+docker compose run --rm app python ritten.py    # group the clips into trips
+```
+
+Then open <http://127.0.0.1:8965>. Re-run those three commands whenever you add new
+footage.
+
+Your settings, the index and the thumbnails live on the host (`config.json`, `data/`,
+`thumbs/`), so rebuilding the image never costs you a re-index. Footage is mounted
+**read-only**. Point the footage path in `docker-compose.yml` at your archive; use a
+`:ro,z` mount instead of `:ro` on hosts with SELinux.
+
+Keep the container's `TZ` in step with the `timezone` setting in `config.json`, or trips
+will be grouped against the wrong day boundaries.
+
+The image builds from the repository root. It applies one small portability fix during
+the build — see [`patches/`](patches/) — because `speed.py` hardcodes an ffmpeg
+hardware-acceleration flag that only exists on macOS, which would otherwise make the
+speed (and therefore the distance) silently produce nothing on Linux.
 
 ---
 

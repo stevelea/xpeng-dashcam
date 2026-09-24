@@ -140,11 +140,20 @@ def load_config(herlaad=False):
 
 
 def save_config(nieuw):
-    """Schrijft config.json en vergeet de gecachte versie."""
+    """Schrijft config.json en vergeet de gecachte versie.
+
+    De reservekopie is een extraatje: lukt die niet (bijvoorbeeld omdat de map
+    alleen-lezen is, zoals in een container), dan schrijven we de config alsnog.
+    Anders laat een mislukte back-up de hele instellingenpagina klappen met een
+    500, terwijl het opslaan zelf prima had gekund.
+    """
     global _config
     pad = HERE / 'config.json'
     if pad.exists():
-        pad.with_suffix('.json.bak').write_text(pad.read_text(encoding='utf-8'), encoding='utf-8')
+        try:
+            pad.with_suffix('.json.bak').write_text(pad.read_text(encoding='utf-8'), encoding='utf-8')
+        except OSError:
+            pass
     with open(pad, 'w', encoding='utf-8') as f:
         json.dump(nieuw, f, indent=2, ensure_ascii=False)
     _config = None

@@ -24,7 +24,9 @@ import fragment as fragment_mod
 import remmen as remmen_mod
 import weer as weer_mod
 
-AMS = store.tijdzone()
+# Niet als constante vastleggen: de tijdzone staat in config.json en is via de
+# instellingenpagina te wijzigen. Een waarde die bij het importeren één keer
+# wordt gelezen, blijft dan staan tot de app opnieuw start.
 STATIC = HERE / 'static'
 app = FastAPI(title='XPENG dashcam')
 
@@ -94,7 +96,8 @@ def search(ts: str, window_min: int = 30):
     except ValueError:
         raise HTTPException(400, 'tijd niet begrepen, gebruik JJJJ-MM-DD UU:MM')
     if want.tzinfo is None:
-        want = want.replace(tzinfo=AMS)
+        # Per verzoek opzoeken, zodat een gewijzigde tijdzone meteen geldt.
+        want = want.replace(tzinfo=store.tijdzone())
     lo = (want - timedelta(minutes=window_min)).isoformat(timespec='seconds')
     hi = (want + timedelta(minutes=window_min)).isoformat(timespec='seconds')
     con = store.connect()

@@ -1,0 +1,29 @@
+# Nothing here is needed to run the viewer.
+.git
+.github
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+
+# 27 MB of sample footage; run ./load_demo.py locally if you want the demo day.
+demo/
+
+# Generated state - mounted from the host instead, so it must not be baked in.
+data/*.db
+data/*.db-*
+data/backups/
+thumbs/
+
+# Your own settings and secrets. Note data/digits.json IS copied: it is not
+# user data but the digit templates the speed reader needs.
+config.json
+config.json.bak
+*.otrc
+owntracks/*-link.txt
+nas-scripts/
+
+.DS_Store
+*.log
+server.log

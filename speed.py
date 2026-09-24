@@ -91,7 +91,10 @@ def read(gray_rows, templates, min_score=0.86):
 def sample_clip(path, every=5):
     """Geeft [(seconde, km/h)] terug. Eén ffmpeg-pass, alleen de balk uitgesneden."""
     x1, y1, x2, y2 = CROP
-    cmd = [FFMPEG, '-nostdin', '-loglevel', 'error', '-hwaccel', 'videotoolbox',
+    # VideoToolbox bestaat alleen op macOS; elders stopt ffmpeg er meteen op en leest hij
+    # stil niets (gevonden door stevelea, PR #1).
+    versnelling = ['-hwaccel', 'videotoolbox'] if sys.platform == 'darwin' else []
+    cmd = [FFMPEG, '-nostdin', '-loglevel', 'error', *versnelling,
            '-i', str(path),
            '-vf', f'fps=1/{every},crop={x2-x1}:{y2-y1}:{x1}:{y1},format=gray',
            '-f', 'rawvideo', '-']
