@@ -1,0 +1,319 @@
+/* ── Fonts (lokaal, zie fonts/README.md) ────────────────────────────────────
+   Zelf hosten i.p.v. via Google Fonts: de app draait in het HA-ingress-frame en
+   moet ook zonder internet of onder een strak CSP dezelfde stijl houden.
+   Beide zijn variabele fonts, dus één bestand dekt het hele gewichtsbereik. */
+@font-face {
+  font-family: "Lexend Deca";
+  src: url("fonts/lexenddeca-latin.woff2") format("woff2");
+  font-weight: 300 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Fraunces";
+  src: url("fonts/fraunces-latin.woff2") format("woff2");
+  font-weight: 400 700; font-style: normal; font-display: swap;
+}
+
+/* ── Tokens: WineApp-huisstijl (donker met goud accent, licht via data-theme) ── */
+:root {
+  --gold: #b08334; --gold-soft: #d4a857; --gold-deep: #9e7019;
+  --grad: linear-gradient(135deg, #9e7019 0%, #b08334 55%, #d4a857 100%);
+  --bg: #121212; --bg-soft: #1a1a1a; --card: #1c1c1d; --card-soft: rgba(255, 255, 255, .05);
+  --ink: #f4f3f1; --muted: #9b9892; --line: rgba(255, 255, 255, .08);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 30px -14px rgba(0, 0, 0, .7);
+  --shadow-lift: 0 2px 5px rgba(0, 0, 0, .55), 0 20px 40px -14px rgba(0, 0, 0, .8);
+  --ok: #3e8a42; --info: #5a93e0; --danger: #e8453a;
+}
+
+html[data-theme="light"] {
+  --gold: #9e7019; --gold-soft: #b08334; --gold-deep: #7a5a1f;
+  --bg: #faf9f7; --bg-soft: #f0eee9; --card: #ffffff; --card-soft: rgba(0, 0, 0, .025);
+  --ink: #1f1d18; --muted: #6e6a62; --line: rgba(31, 29, 24, .1);
+  --shadow: 0 1px 2px rgba(31, 29, 24, .05), 0 8px 24px -12px rgba(31, 29, 24, .16);
+  --shadow-lift: 0 2px 4px rgba(31, 29, 24, .06), 0 16px 32px -12px rgba(31, 29, 24, .24);
+  --info: #1e6fd9; --danger: #c9190b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.55 "Lexend Deca", -apple-system, "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .display {
+  font-family: "Fraunces", ui-serif, Georgia, serif;
+  font-weight: 600; letter-spacing: -.01em; line-height: 1.25; margin: 0;
+}
+
+h1 { font-size: 1.6rem; }
+h2 { font-size: 1.12rem; margin-bottom: .9rem; }
+
+.wrap { max-width: 1200px; margin: 0 auto; padding: 1.1rem 1.1rem 2rem; }
+
+/* ── Kop ───────────────────────────────────────────────────────────────────── */
+header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+header .sub { color: var(--muted); font-size: .82rem; }
+header .spacer { flex: 1; }
+.brandbar { width: 4px; height: 38px; border-radius: 2px; background: var(--grad); flex-shrink: 0; }
+
+.theme-toggle {
+  display: grid; place-items: center; width: 2.5rem; height: 2.5rem; flex-shrink: 0;
+  border: 1px solid var(--line); border-radius: 12px; cursor: pointer; padding: 0;
+  background: var(--card); color: var(--ink); box-shadow: var(--shadow);
+  transition: transform .15s;
+}
+.theme-toggle:hover { transform: scale(1.06); }
+.theme-toggle svg { width: 17px; height: 17px; }
+/* Toon de zon in donkere modus (= "klik voor licht") en omgekeerd */
+.theme-toggle .i-sun { display: block; }
+.theme-toggle .i-moon { display: none; }
+html[data-theme="light"] .theme-toggle .i-sun { display: none; }
+html[data-theme="light"] .theme-toggle .i-moon { display: block; }
+
+/* ── Kaarten ───────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  padding: 1.1rem; box-shadow: var(--shadow); margin-bottom: 1rem;
+}
+
+/* ── Knoppen ───────────────────────────────────────────────────────────────── */
+button, .btn {
+  font: inherit; font-size: .92rem; font-weight: 600;
+  padding: .6rem 1.15rem; border-radius: 12px; border: 0;
+  background: var(--grad); color: #fff;
+  cursor: pointer; text-decoration: none; display: inline-block;
+  box-shadow: var(--shadow); transition: transform .15s, box-shadow .15s;
+}
+button:hover:not(:disabled), .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); }
+
+button.ghost, .btn.ghost {
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); font-weight: 500;
+}
+button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+button.small, .btn.small { padding: .42rem .9rem; font-size: .82rem; }
+
+input[type=date], select {
+  font: inherit; font-size: .9rem;
+  padding: .5rem .7rem; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  box-shadow: var(--shadow); appearance: none; -webkit-appearance: none;
+  outline: none; transition: border-color .15s;
+}
+input[type=date]:focus, select:focus { border-color: var(--gold-soft); }
+
+/* ── Filters ───────────────────────────────────────────────────────────────── */
+.filters { display: flex; gap: 1.3rem; flex-wrap: wrap; align-items: flex-end; }
+.field { display: flex; flex-direction: column; gap: .35rem; }
+.field label {
+  font-size: .68rem; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .07em;
+}
+
+/* Snelkeuze: pillen zoals .btn-reset in WineApp */
+.presets { display: flex; gap: .4rem; flex-wrap: wrap; }
+.presets button {
+  padding: .45rem .85rem; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--card); color: var(--muted);
+  font-size: .82rem; font-weight: 500; white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.presets button:hover:not(.active) { color: var(--ink); transform: none; box-shadow: var(--shadow); }
+.presets button.active { background: var(--gold); color: #fff; border-color: var(--gold); }
+
+.cars { display: flex; gap: 1.1rem; flex-wrap: wrap; }
+.cars label { display: flex; align-items: center; gap: .5rem; cursor: pointer; font-size: .9rem; }
+.cars input { accent-color: var(--gold); }
+.dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+/* ── KPI-tegels (WineApp .stat) ────────────────────────────────────────────── */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: .7rem; margin-bottom: 1rem; }
+/* flex + margin-top:auto → de cijfers lijnen onderling uit, ook als een label 2 regels wordt */
+.kpi {
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  padding: 1.05rem 1rem; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; min-height: 104px;
+}
+.kpi .label {
+  font-size: .68rem; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .07em;
+}
+.kpi .value {
+  font-family: "Fraunces", ui-serif, Georgia, serif;
+  font-size: 1.85rem; font-weight: 600; letter-spacing: -.02em; line-height: 1;
+  margin-top: auto; padding-top: .5rem;
+}
+.kpi .value small { font-size: .72rem; color: var(--muted); font-weight: 400; font-family: inherit; }
+/* De laatste tegel is de uitkomst waar het om draait → gouden vlak */
+.kpi.accent { background: var(--grad); color: #fff; border-color: transparent; box-shadow: var(--shadow-lift); }
+.kpi.accent .label, .kpi.accent .value small { color: #fff; opacity: .9; }
+
+.grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; }
+@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
+.chartbox { position: relative; height: 300px; }
+.chartbox-sm { height: 260px; }
+
+.cardhead { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.cardhead h2 { margin: 0; }
+.cardhead .spacer { flex: 1; }
+
+.dl-actions { display: flex; gap: .6rem; flex-wrap: wrap; }
+.dl-pickers { display: flex; gap: .7rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+
+/* ── Tabellen ──────────────────────────────────────────────────────────────── */
+table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+th, td { text-align: left; padding: .5rem .65rem; border-bottom: 1px solid var(--line); }
+th {
+  color: var(--muted); font-weight: 600; font-size: .68rem;
+  text-transform: uppercase; letter-spacing: .07em;
+}
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.total td { font-weight: 600; border-top: 1px solid var(--gold); border-bottom: none; }
+/* Horizontaal schuiven op tussenbreedtes; onder 640px worden het kaartjes (zie onder) */
+.scroll, #ere-table { max-width: 100%; overflow-x: auto; }
+.scroll { max-height: 460px; overflow-y: auto; }
+
+/* ── Tabbladen: segmented control met gouden actieve tab ───────────────────── */
+.tabs {
+  display: inline-flex; gap: .25rem;
+  background: var(--bg-soft); border: 1px solid var(--line); border-radius: 14px;
+  padding: .3rem; margin: .3rem 0 1.1rem; max-width: 100%; overflow-x: auto;
+}
+.tabs button {
+  background: transparent; border: 1px solid transparent; box-shadow: none;
+  color: var(--muted); border-radius: 11px;
+  padding: .55rem 1.25rem; font-size: .92rem; font-weight: 500; white-space: nowrap;
+}
+.tabs button:hover:not(.active) { color: var(--ink); transform: none; box-shadow: none; }
+.tabs button.active {
+  background: var(--card); color: var(--gold-soft); font-weight: 600;
+  border-color: var(--line); box-shadow: var(--shadow); transform: none;
+}
+
+/* ── Downloads ─────────────────────────────────────────────────────────────── */
+.dl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .5rem; }
+.dl-row {
+  display: flex; align-items: center; justify-content: space-between; gap: .6rem;
+  padding: .6rem .8rem; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card-soft); transition: border-color .14s;
+}
+.dl-row:hover { border-color: var(--gold-deep); }
+.dl-row span { font-size: .82rem; }
+
+.muted { color: var(--muted); }
+.pill {
+  /* staat in een h2, dus het serif-font moet expliciet terug naar de UI-stack */
+  font-family: "Lexend Deca", -apple-system, "Helvetica Neue", sans-serif;
+  font-size: .72rem; font-weight: 600; padding: .05rem .55rem; border-radius: 999px;
+  background: var(--card-soft); color: var(--muted); border: 1px solid var(--line);
+}
+
+#syncbar { display: none; align-items: center; gap: .6rem; }
+#syncbar.on { display: flex; }
+.spinner {
+  width: 15px; height: 15px; border: 2px solid var(--line);
+  border-top-color: var(--gold-soft); border-radius: 50%; animation: spin .8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.err { color: var(--danger); }
+.hidden { display: none; }
+
+/* ── Telefoon staand (ook in het HA-ingress-frame) ───────────────────────────
+   Getest op 375px. Uitgangspunten: één kolom, tapdoelen ≥44px, invoervelden
+   16px (kleiner laat iOS inzoomen bij focus) en brede tabellen als kaartjes. */
+@media (max-width: 640px) {
+  .wrap { padding: .8rem .8rem calc(1.8rem + env(safe-area-inset-bottom)); }
+  h1 { font-size: 1.35rem; }
+  h2 { font-size: 1.02rem; margin-bottom: .8rem; }
+  .card { padding: .9rem; margin-bottom: .8rem; }
+
+  /* Regel 1: streep + titel + themaknop. Regel 2: syncknop over de volle breedte. */
+  header {
+    display: grid; grid-template-columns: auto 1fr auto;
+    gap: .6rem .7rem; align-items: center; margin-bottom: .9rem;
+  }
+  header .sub { font-size: .76rem; }
+  header .spacer { display: none; }
+  header .titles { min-width: 0; }
+  /* Expliciet plaatsen: anders schuift autoplaatsing de knop naar een eigen regel */
+  .theme-toggle { grid-column: 3; grid-row: 1; }
+  #btn-sync, #syncbar { grid-column: 1 / -1; width: 100%; }
+  .brandbar { height: 34px; }
+
+  input[type=date], select { font-size: 16px; padding: .65rem .7rem; width: 100%; }
+  button, .btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  button.small, .btn.small { min-height: 40px; }
+
+  .filters { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem .6rem; }
+  .field-wide { grid-column: 1 / -1; }
+  .presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: .35rem; }
+  .presets button { padding: .5rem .3rem; font-size: .8rem; }
+  .cars { gap: .2rem 1.2rem; }
+  .cars label { min-height: 44px; }
+  .cars input { width: 20px; height: 20px; }
+
+  .kpis { grid-template-columns: 1fr 1fr; gap: .55rem; margin-bottom: .9rem; }
+  .kpi { padding: .8rem; min-height: 84px; }
+  .kpi .value { font-size: 1.45rem; }
+  .kpi .value small { font-size: .66rem; }
+  /* Vijf tegels in twee kolommen laat er één alleen achter — die krijgt de volle breedte */
+  .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
+
+  /* Tabbladen als 2x2-raster: geen horizontaal geschuif, ruime tapdoelen */
+  .tabs {
+    display: grid; grid-template-columns: 1fr 1fr; gap: .3rem;
+    width: 100%; overflow: visible; margin: .2rem 0 .9rem;
+  }
+  .tabs button { padding: .6rem .3rem; font-size: .86rem; }
+
+  .chartbox { height: 240px; }
+  .chartbox-sm { height: 220px; }
+
+  .cardhead { gap: .6rem; }
+  .cardhead h2 { width: 100%; }
+  .cardhead .spacer { display: none; }
+  .cardhead select, .cardhead .btn { width: 100%; }
+
+  .dl-actions, .dl-pickers { flex-direction: column; align-items: stretch; }
+  .dl-actions .btn { width: 100%; }
+  .dl-grid { gap: .45rem; }
+
+  /* Brede tabellen worden kaartjes: acht kolommen passen niet op 375px.
+     De labels komen uit data-label, dus er is één renderpad voor beide vormen.
+     Opzet volgt de .dkv-rijen uit WineApp: label links grijs, waarde rechts. */
+  table.responsive thead { display: none; }
+  table.responsive tr {
+    display: flex; flex-direction: column;
+    background: var(--card-soft); border: 1px solid var(--line); border-radius: 14px;
+    margin-bottom: .5rem; padding-bottom: .3rem;
+  }
+  table.responsive td {
+    display: flex; align-items: baseline; justify-content: space-between; gap: .8rem;
+    border: none; padding: .28rem .8rem; font-size: .88rem; text-align: right;
+  }
+  table.responsive td::before {
+    content: attr(data-label); flex: none; text-align: left;
+    color: var(--muted); font-size: .68rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .07em;
+  }
+  /* De regelkop (auto / maand) staat bovenaan het kaartje, ongeacht kolomvolgorde */
+  table.responsive td.rowhead {
+    order: -1; display: flex; align-items: center; gap: .5rem;
+    /* de td-regel hierboven zet space-between; de kop moet juist links beginnen */
+    justify-content: flex-start; text-align: left;
+    font-family: "Fraunces", ui-serif, Georgia, serif;
+    font-weight: 600; font-size: 1rem; padding: .6rem .8rem;
+    border-bottom: 1px solid var(--line); margin-bottom: .2rem;
+  }
+  table.responsive td.rowhead::before { content: none; }
+  table.responsive tr.total { border-color: var(--gold); }
+  table.responsive .hide-sm { display: none; }
+
+  .scroll { max-height: 65vh; }
+}

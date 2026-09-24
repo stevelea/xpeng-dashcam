@@ -1,0 +1,311 @@
+/* Aanvullingen op de gedeelde WineApp-stijl, alleen voor deze viewer.
+   Eén scherm: links kiezen, rechts kijken. */
+
+.brandmark {
+  width: 62px; height: 34px; flex-shrink: 0;
+  background: var(--grad);
+  -webkit-mask: url("img/xpeng-mark.png") no-repeat center / contain;
+  mask: url("img/xpeng-mark.png") no-repeat center / contain;
+}
+
+.wrap.breed { max-width: 1500px; }
+
+.hoofd { display: grid; grid-template-columns: 268px 1fr; gap: 1rem; align-items: start; }
+.zijkant { position: sticky; top: 1rem; }
+.zijkant .card { margin-bottom: .8rem; }
+.inhoud { min-width: 0; }
+
+.breedknop { width: 100%; margin-bottom: .4rem; }
+.breedknop:last-child { margin-bottom: 0; }
+
+.zoekkaart h2 { font-size: .95rem; margin-bottom: .6rem; }
+.zoekvelden { display: flex; gap: .4rem; margin-bottom: .5rem; }
+.zoekvelden input { flex: 1; min-width: 0; font-size: .85rem; padding: .45rem .5rem;
+  border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+.zoekkaart button { width: 100%; }
+#searchinfo { font-size: .78rem; margin-top: .5rem; }
+
+/* ── Kalender ──────────────────────────────────────────────────────────────── */
+.kalkop { display: flex; align-items: center; gap: .3rem; margin-bottom: .6rem; }
+.kalkop select {
+  flex: 1; min-width: 0; font-size: .84rem; padding: .35rem .4rem; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  box-shadow: none; appearance: none; -webkit-appearance: none; text-align: center;
+}
+.kalpijl {
+  background: transparent; border: 1px solid var(--line); box-shadow: none;
+  color: var(--muted); border-radius: 9px; padding: .2rem .5rem; font-size: 1rem; line-height: 1.2;
+}
+.kalpijl:hover:not(:disabled) { color: var(--ink); transform: none; box-shadow: none; }
+.kalpijl:disabled { opacity: .3; }
+
+.kalweek, .kalgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.kalweek span {
+  text-align: center; font-size: .6rem; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .05em; padding-bottom: .25rem;
+}
+
+.kaldag {
+  position: relative; aspect-ratio: 1; display: grid; place-items: center;
+  font-size: .78rem; font-variant-numeric: tabular-nums; border-radius: 8px;
+  background: transparent; border: 1px solid transparent; box-shadow: none;
+  color: var(--muted); padding: 0; min-height: 0;
+}
+.kaldag.leeg { visibility: hidden; }
+.kaldag:disabled { color: var(--line); cursor: default; }
+/* Groen cijfer = er is die dag opgenomen */
+.kaldag.opname { color: var(--ok); font-weight: 700; }
+html[data-theme="dark"] .kaldag.opname { color: #5cc163; }
+.kaldag.opname:hover { background: var(--card-soft); transform: none; box-shadow: none; }
+.kaldag.nood::after {
+  content: ""; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
+  width: 4px; height: 4px; border-radius: 50%; background: var(--danger);
+}
+.kaldag.actief { background: var(--grad); color: #fff; font-weight: 700; }
+.kaldag.actief::after { background: #fff; }
+.kaldag.vandaag { border-color: var(--gold-soft); }
+
+.kaluitleg { display: flex; gap: .9rem; margin-top: .6rem; font-size: .64rem; color: var(--muted); }
+.kaluitleg span { display: flex; align-items: center; gap: .3rem; }
+.stip { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.stip.opname { background: var(--ok); }
+.stip.nood { background: var(--danger); }
+
+/* ── Ritten van de dag ─────────────────────────────────────────────────────── */
+.dagritten { display: flex; flex-wrap: wrap; gap: .45rem; }
+.dagrit {
+  display: flex; align-items: center; gap: .55rem; text-align: left;
+  padding: .5rem .7rem; border-radius: 12px; cursor: pointer;
+  background: var(--card-soft); border: 1px solid var(--line); box-shadow: none;
+  color: var(--ink); font-weight: 500; font-size: .84rem;
+  transition: border-color .14s, transform .14s;
+}
+.dagrit:hover { border-color: var(--gold-deep); transform: translateY(-1px); box-shadow: var(--shadow); }
+.dagrit.actief { border-color: var(--gold-soft); background: var(--card); }
+.dagrit .tijd { font-variant-numeric: tabular-nums; }
+.dagrit .km { color: var(--gold-soft); font-weight: 600; }
+.dagrit .km.onbekend { color: var(--muted); font-weight: 500; }
+.dagrit .duur { color: var(--muted); font-size: .78rem; }
+.dagrit .zak { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+  color: #fff; background: var(--gold-deep); border-radius: 999px; padding: .08rem .45rem; }
+#btn-zakelijk.aan { background: var(--gold); color: #fff; border-color: var(--gold); }
+.dagrit .lijn { width: 13px; height: 0; border-top: 3px solid var(--ok); flex-shrink: 0; }
+.dagrit .lijn.gereconstrueerd { border-top-style: dashed; border-top-color: var(--gold-soft); }
+.dagrit .lijn.geen { border-top-color: var(--line); }
+
+/* ── Kaartje bij een rit ───────────────────────────────────────────────────── */
+.ritkaartje { height: 320px; border: 1px solid var(--line); border-radius: 12px; }
+.ritpunten { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .8rem; }
+.wpchip {
+  font-size: .76rem; padding: .3rem .6rem; border-radius: 999px;
+  background: var(--card-soft); border: 1px solid var(--line);
+}
+.wpchip i { color: var(--muted); font-style: normal; font-size: .64rem;
+  text-transform: uppercase; letter-spacing: .05em; margin-left: .45rem;
+  padding-left: .45rem; border-left: 1px solid var(--line); }
+
+.routemerk {
+  font-size: .66rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  padding: .18rem .55rem; border-radius: 999px; border: 1px solid var(--line);
+}
+.routemerk.hidden { display: none; }
+.routemerk.gemeten { background: rgba(62,138,66,.18); color: var(--ok); border-color: var(--ok); }
+html[data-theme="dark"] .routemerk.gemeten { color: #5cc163; }
+.routemerk.gereconstrueerd { background: var(--card-soft); color: var(--muted); }
+
+/* ── Beelden ───────────────────────────────────────────────────────────────── */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .7rem; }
+.tile {
+  border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+  background: var(--card-soft); cursor: pointer; transition: border-color .14s, transform .14s;
+}
+.tile:hover { border-color: var(--gold-deep); transform: translateY(-2px); }
+.tile .shot {
+  position: relative; aspect-ratio: 16 / 9; background: var(--bg-soft);
+  display: grid; place-items: center; overflow: hidden;
+}
+.tile .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tile .shot .wait { font-size: .72rem; color: var(--muted); }
+.tile .badge {
+  position: absolute; top: .4rem; left: .4rem;
+  font-size: .62rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+  padding: .15rem .45rem; border-radius: 999px;
+  background: rgba(0,0,0,.62); color: #fff; backdrop-filter: blur(3px);
+}
+.tile .badge.emer { background: var(--danger); }
+.tile .meta {
+  display: flex; align-items: baseline; gap: .5rem; padding: .45rem .6rem;
+  font-size: .84rem; font-variant-numeric: tabular-nums;
+}
+.tile .meta .kmh { margin-left: auto; font-weight: 600; color: var(--gold-soft); font-size: .78rem; }
+.tile .meta .kmh.stil { color: var(--muted); font-weight: 500; }
+
+.empty { color: var(--muted); padding: 1.5rem .2rem; }
+
+/* ── Speler en grote kaart ─────────────────────────────────────────────────── */
+.overlay {
+  /* ⚠️ Hoger dan 1000: Leaflet zet zijn eigen knoppen, legenda en logo op 1000.
+     Op 900 kropen die dwars door de speler heen over het beeld. */
+  position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center;
+  background: rgba(0,0,0,.82); padding: 1.2rem;
+  padding-bottom: calc(1.2rem + env(safe-area-inset-bottom));
+}
+.overlay.hidden { display: none; }
+.playerbox, .grotekaartbox {
+  width: min(1200px, 100%); background: var(--card);
+  border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-lift);
+  padding: .9rem; display: flex; flex-direction: column; gap: .7rem;
+}
+.playerhead { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.playerhead .spacer { flex: 1; }
+.playerhead input[type=date] {
+  font-size: .82rem; padding: .35rem .5rem; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--card-soft); color: var(--ink);
+}
+.playertitle { font-family: "Fraunces", ui-serif, Georgia, serif; font-weight: 600; font-size: 1.05rem; }
+.playerbox video { width: 100%; max-height: 68vh; border-radius: 10px; background: #000; display: block; }
+.playernav { display: flex; align-items: center; }
+.playernav .spacer { flex: 1; }
+.grotekaart { height: 72vh; border-radius: 12px; }
+
+.viewswitch { display: inline-flex; gap: .25rem; background: var(--bg-soft);
+  border: 1px solid var(--line); border-radius: 12px; padding: .22rem; }
+.viewswitch button {
+  background: transparent; border: 0; box-shadow: none; color: var(--muted);
+  border-radius: 9px; padding: .35rem .8rem; font-size: .8rem; font-weight: 500;
+}
+.viewswitch button.active { background: var(--card); color: var(--gold-soft); font-weight: 600; }
+.viewswitch button:hover:not(.active) { color: var(--ink); transform: none; box-shadow: none; }
+
+/* Leaflet erft anders het serif-font en een witte achtergrond in donkere modus */
+.leaflet-container { font-family: "Lexend Deca", -apple-system, sans-serif; background: var(--bg-soft); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--card); color: var(--ink); }
+.leaflet-popup-content { font-size: .85rem; }
+.leaflet-popup-content b { color: var(--gold-soft); }
+html[data-theme="dark"] .leaflet-tile { filter: brightness(.72) saturate(.7) contrast(.95); }
+
+/* ── Telefoon ──────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .hoofd { grid-template-columns: 1fr; }
+  .zijkant { position: static; }
+}
+@media (max-width: 640px) {
+  .brandmark { width: 50px; height: 27px; grid-column: 1; grid-row: 1; }
+  .grid { grid-template-columns: 1fr 1fr; gap: .5rem; }
+  .ritkaartje { height: 240px; }
+  .overlay { padding: .5rem; }
+  .playerbox, .grotekaartbox { padding: .6rem; }
+  .playerbox video { max-height: 46vh; }
+  .grotekaart { height: 62vh; }
+  .dagrit { width: 100%; }
+}
+
+
+/* ── Legenda ───────────────────────────────────────────────────────────────────
+   De lijnsoorten zeggen iets over hoe zeker we van de route zijn; dat moet je
+   ergens kunnen lezen zonder het te hoeven raden. */
+.uitleg {
+  display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .8rem;
+  font-size: .68rem; color: var(--muted);
+}
+.uitleg:empty, .uitleg.hidden { display: none; }
+.uitleg span { display: flex; align-items: center; gap: .4rem; }
+.uitleg i.lijn { width: 20px; height: 0; border-top: 3px solid var(--ok); display: inline-block; }
+.uitleg i.lijn.gereconstrueerd { border-top-style: dashed; border-top-color: var(--gold-soft); }
+.uitleg i.lijn.geen { border-top-color: var(--line); }
+
+.kaartlegenda {
+  background: color-mix(in srgb, var(--card) 93%, transparent);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--line); border-radius: 11px; padding: .5rem .65rem;
+  font-size: .68rem; color: var(--muted); box-shadow: var(--shadow); line-height: 1.5;
+}
+.kaartlegenda div { display: flex; align-items: center; gap: .45rem; }
+.kaartlegenda i { width: 20px; height: 0; border-top: 4px solid #4cbf54; display: inline-block; }
+.kaartlegenda i.gereconstrueerd { border-top-style: dashed; border-top-color: #f0bf63; }
+.kaartlegenda i.punt {
+  width: 10px; height: 10px; border: 2px solid #1a1a1a; background: #f0bf63;
+  border-radius: 50%; border-top-width: 2px;
+}
+
+
+/* Aangenomen punten zijn hol: geredeneerd, niet gemeten. */
+.wpchip.aangenomen { border-style: dashed; color: var(--muted); }
+.kaartlegenda i.punt.aangenomen { background: transparent; border-color: #f0bf63; border-style: dashed; }
+
+/* ── Richting op de route ─────────────────────────────────────────────────────
+   Pijlpunten draaien mee met de rijrichting. Ze mogen geen klik opvangen: dan
+   zou je de kaart eronder niet meer kunnen slepen. */
+.routepijl { background: none; border: 0; pointer-events: none; }
+.routepijl svg { width: 18px; height: 18px; display: block; transform-origin: 50% 50%; }
+
+.routemerkje { background: none; border: 0; pointer-events: none; }
+.routemerkje span {
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  font: 700 12px/1 var(--font-ui, system-ui); color: #10100e;
+  border: 2px solid rgba(0,0,0,.65); box-shadow: 0 1px 4px rgba(0,0,0,.5);
+}
+
+/* ── Knoppen: breed op het bureaublad, een icoonrij op de telefoon ───────────
+   Op een breed scherm zijn dit gewoon knoppen onder elkaar, zoals ze waren. Pas op
+   een smal scherm worden het vakjes naast elkaar met het icoon erboven — daar is
+   elke regel er een te veel. Eén markup, twee vormen: geen dubbele knoppen met
+   dezelfde id. */
+.knoppenkaart { padding: .5rem; }
+.knoppenrij { display: grid; gap: .5rem; }
+.ikoonknop {
+  display: flex; align-items: center; justify-content: center; gap: .5rem;
+  cursor: pointer; width: 100%;
+  background: var(--card-soft); border: 1px solid var(--line); border-radius: 9px;
+  color: var(--ink); padding: .42rem .8rem; min-height: 38px;
+  font: 600 .82rem "Lexend Deca", sans-serif;
+}
+.ikoonknop:hover { border-color: var(--gold); color: var(--gold-soft); }
+.ikoonknop svg { width: 18px; height: 18px; flex: none; }
+.alleen-smal { display: none; }
+
+/* ── Telefoonformaat ──────────────────────────────────────────────────────────
+   De kalender vult op een telefoon het halve beeld voor je iets gezien hebt.
+   Daar staat hij dichtgeklapt achter een knop. */
+@media (max-width: 700px) {
+  .alleen-smal { display: flex; }
+  .knoppenrij { grid-auto-flow: column; grid-auto-columns: 1fr; gap: .4rem; }
+  .ikoonknop {
+    flex-direction: column; gap: .15rem; min-height: 60px; padding: .55rem .3rem;
+    font: 500 .68rem/1.15 "Lexend Deca", sans-serif; text-align: center; border-radius: 11px;
+  }
+  .ikoonknop svg { width: 21px; height: 21px; }
+  .kalenderkaart .kalender { display: none; }
+  .kalenderkaart.open .kalender { display: grid; }
+  .kalenderkaart { padding: .5rem; }
+  .kalenderkaart:not(.open) { display: none; }
+  .kalender button { padding: .55rem 0; font-size: .9rem; }
+  .zijkant { position: static; }
+}
+
+/* ── Instellingenscherm ─────────────────────────────────────────────────────
+   Zelfde doos als de grote kaart, maar smaller: het zijn maar een paar velden. */
+.instelbox { width: min(720px, 100%); }
+.instelbody { display: grid; gap: .9rem; }
+.instelrij { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+.instelveld { display: grid; gap: .3rem; }
+.instelveld > span { font-size: .8rem; color: var(--muted); }
+.instelveld input {
+  background: var(--card-soft); border: 1px solid var(--line); border-radius: 9px;
+  padding: .55rem .7rem; color: var(--ink); font: 400 .88rem "Lexend Deca", sans-serif;
+  outline: none; min-height: 40px; width: 100%;
+}
+.instelveld input:focus { border-color: var(--gold-soft); }
+.instelveld small, .instelnoot { font-size: .72rem; color: var(--muted); line-height: 1.4; }
+.instelknoppen { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.instelmelding { font-size: .78rem; color: var(--muted); }
+.instelmelding.goed { color: #4cbf54; }
+.instelmelding.fout { color: #e0603c; }
+
+@media (max-width: 700px) {
+  .instelrij { grid-template-columns: 1fr; }
+  .instelveld input { font-size: 16px; }
+}
+
+.taalknop { font: 600 .74rem "Lexend Deca", sans-serif; letter-spacing: .04em; }
