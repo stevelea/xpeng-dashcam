@@ -146,6 +146,24 @@ Each of these has already cost a deploy.
    means before it copies — reporting what it actually removed rather than the count
    from before the delete, which is the tempting number to print and not the same one.
 
+### The Dockerfile that is actually built lives one level up
+
+`docker-compose.v1.yml` builds with `context: ./app-src` and
+`dockerfile: ../Dockerfile`, so the Dockerfile in use is
+`xpeng-dashcam/Dockerfile` — **not** the copy the deploy drops in `app-src`. The
+script now refreshes it from the checkout on every deploy, because a stale copy
+there silently keeps applying whatever local patch it carries.
+
+That is not hypothetical: this installation's Dockerfile patched `speed.py` to
+stop hardcoding `-hwaccel videotoolbox`, which is macOS-only. Upstream took the
+same fix over in v0.3, the patch's anchor disappeared with it, and the next
+build failed on `expected 1 ffmpeg hwaccel site, found 0`. The patch step is gone
+and `app-src/patches/` is now unused.
+
+The build step also captures the compose output instead of piping it through
+`tail` on the far side. `... | tail -6` ends in `tail` and exits 0, so that first
+failed build was reported as a success while the old image carried on serving.
+
 ### What survives a rebuild, and what does not
 
 | | |

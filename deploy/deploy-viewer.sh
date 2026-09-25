@@ -186,6 +186,17 @@ bestandslijst | COPYFILE_DISABLE=1 tar --no-xattrs --no-fflags -cf - -T - \
   | ssh "$HOST" "tar -xf - -C '$TARGET'" || { fout "copy failed"; exit 1; }
 printf '  copied\n'
 
+# The Dockerfile that this installation builds lives one level above the source:
+# its compose uses `dockerfile: ../Dockerfile`, and only $TARGET is sent above, so
+# that copy has to be refreshed here. Left stale it keeps applying a patch that
+# upstream has since taken over, which is exactly how a build ends up failing on
+# code that is already fixed. See the note in DEPLOYMENT.md.
+if [ -f "$SOURCE/Dockerfile" ]; then
+  ssh "$HOST" "cat > '$PROJECT/Dockerfile'" < "$SOURCE/Dockerfile" \
+    || { fout "could not refresh $PROJECT/Dockerfile"; exit 1; }
+  printf '  Dockerfile     -> %s/Dockerfile\n' "$PROJECT"
+fi
+
 # ── Build ─────────────────────────────────────────────────────────────────────
 stap "Building the image and restarting"
 # Keep the image we are replacing, so --rollback has somewhere to go.
@@ -193,8 +204,13 @@ if ssh "$HOST" "docker image inspect $IMAGE >/dev/null 2>&1"; then
   ssh "$HOST" "docker tag $IMAGE $PREVIOUS" && printf '  current image kept as %s\n' "$PREVIOUS"
 fi
 
-ssh "$HOST" "cd '$PROJECT' && $COMPOSE_CMD -f '$COMPOSE_FILE' up -d --build 2>&1 | tail -6" || {
+# The output is captured rather than piped through `tail` on the far side. A remote
+# `... | tail -6` ends in tail and exits 0, so a failed build was reported as a
+# success while the previous image kept serving; that happened once already.
+BOUW="$(ssh "$HOST" "cd '$PROJECT' && $COMPOSE_CMD -f '$COMPOSE_FILE' up -d --build 2>&1")" || {
+  printf '%s\n' "$BOUW" | tail -20
   fout "build or restart failed"; exit 1; }
+printf '%s\n' "$BOUW" | tail -6
 
 # ── Verify ────────────────────────────────────────────────────────────────────
 stap "Verifying"
