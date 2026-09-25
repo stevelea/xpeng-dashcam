@@ -16,6 +16,9 @@ js = (HERE / 'static' / 'app.js').read_text()
 fouten = []
 
 ids = set(re.findall(r'\bid="([^"]+)"', html))
+# Id's die het script zelf in elkaar zet (een paneel dat pas bestaat als het nodig
+# is) staan niet in de pagina maar zijn er wel als je ze opzoekt.
+ids |= set(re.findall(r'id="([a-zA-Z0-9_-]+)"', js))
 gezocht = set(re.findall(r"\$\('#([a-zA-Z0-9_-]+)'", js)) | \
           set(re.findall(r"\$\$\('#([a-zA-Z0-9_-]+)", js))
 for g in sorted(gezocht - ids):
@@ -41,6 +44,83 @@ for naam in sorted(set(re.findall(r'\b([a-zA-Z][a-zA-Z0-9_]{3,})\(', js))):
     if re.search(rf'\.{naam}\s*\(', js) or f'L.{naam}' in js:
         continue
     fouten.append(f'functie {naam}() wordt aangeroepen maar is nergens gedefinieerd')
+
+# ── Functies op de juiste plek ────────────────────────────────────────────────
+# Een functie die tekstueel tussen de accolades van een andere functie staat, ziet
+# er hetzelfde uit maar is van buiten die functie onbereikbaar. Zo belandde
+# pijlenLangs() ooit binnen ritRouteTekenen(): de kaart van de auto riep hem aan,
+# kreeg "is not defined", en de hele rit wilde daarna niet meer openen. Een
+# accoladeteller die strings en commentaar overslaat vindt dat.
+def functiediepten(bron):
+    uit, diepte, i, n, regelbegin = [], 0, 0, len(bron), True
+    while i < n:
+        c = bron[i]
+        if c == '\n':
+            regelbegin, i = True, i + 1
+            continue
+        if regelbegin:
+            if c in ' \t':
+                i += 1
+                continue
+            m = re.match(r'(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(', bron[i:i + 80])
+            if m:
+                uit.append((m.group(1), diepte))
+            regelbegin = False
+        if bron.startswith('//', i):
+            j = bron.find('\n', i)
+            i = n if j < 0 else j
+            continue
+        if bron.startswith('/*', i):
+            j = bron.find('*/', i + 2)
+            i = n if j < 0 else j + 2
+            continue
+        if c in ('"', "'", '`'):
+            i += 1
+            while i < n:
+                if bron[i] == '\\':
+                    i += 2
+                    continue
+                if bron[i] == c:
+                    i += 1
+                    break
+                i += 1
+            continue
+        if c == '{':
+            diepte += 1
+        elif c == '}':
+            diepte -= 1
+        i += 1
+    return uit
+
+
+for naam, diepte in functiediepten(js):
+    if diepte != 0:
+        fouten.append(f'functie {naam}() staat binnen een andere functie '
+                      f'(accoladediepte {diepte}) en is daar niet aanroepbaar')
+
+# ── Woordenlijsten ────────────────────────────────────────────────────────────
+# Een typefout in t('...') levert geen foutmelding op maar de sleutel zelf op het
+# scherm, dus dat moet je zoeken en niet tegenkomen.
+def lijst(naam):
+    m = re.search(rf'const {naam} = \{{(.*?)\n\}};', js, re.S)
+    # Niet ^-verankerd: de lijsten zetten meerdere sleutels op één regel.
+    return set(re.findall(r'([a-z_][a-z0-9_]*)\s*:', m.group(1))) if m else set()
+
+
+engels, nederlands = lijst('TAALEN'), lijst('TAALNL')
+gevraagd = set(re.findall(r"\bt\('([a-z_][a-z0-9_]*)'\)", js))
+gevraagd |= set(re.findall(r'data-i18n="([a-z_][a-z0-9_]*)"', html))
+for sleutel in sorted(gevraagd - engels - nederlands):
+    fouten.append(f'tekstsleutel {sleutel} wordt gebruikt maar staat in geen van beide lijsten')
+
+# Een sleutel die alleen in het Engels staat, is niet fout: de vaste teksten in de
+# pagina bewaren hun Nederlandse tekst in data-nl. Alleen de sleutels die het script
+# zelf opbouwt hebben echt een Nederlandse regel nodig, anders valt zo'n tekst in het
+# Nederlands terug op het Engels.
+for sleutel in sorted(re.findall(r"t\('([a-z_][a-z0-9_]*)'\)", js)):
+    if sleutel in engels and sleutel not in nederlands:
+        fouten.append(f'tekstsleutel {sleutel} staat alleen in het Engels, '
+                      'maar wordt door het script zelf gezet')
 
 for f in fouten:
     print('✗', f)

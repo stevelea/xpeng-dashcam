@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="img/xpeng-180.png">
 <link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="stylesheet" href="style.css?v=34">
-<link rel="stylesheet" href="viewer.css?v=37">
+<link rel="stylesheet" href="viewer.css?v=38">
 </head>
 <body>
 <div class="wrap breed">
@@ -103,6 +103,10 @@
         </div>
         <div id="ritkaartje" class="ritkaartje"></div>
         <div id="ritpunten" class="ritpunten"></div>
+        <!-- Wat de auto zelf van deze rit weet. Verschijnt alleen als EVConduit is
+             ingesteld; de afstand hierin staat NAST onze eigen meting, niet ervoor
+             in de plaats — het zijn twee metingen van hetzelfde. -->
+        <div id="ritauto" class="ritauto hidden"></div>
       </div>
 
       <div class="card">
@@ -196,6 +200,38 @@
         </label>
       </div>
 
+      <!-- EVConduit: de gegevens van de auto zelf. Optioneel; leeg laten kan. -->
+      <div class="instelrij">
+        <label class="instelveld">
+          <span data-i18n="ev_url">Adres van EVConduit</span>
+          <input type="text" id="set-ev-url" spellcheck="false" placeholder="https://evconduit.example.com">
+          <small data-i18n="ev_url_hint">Laat leeg om niets op te halen. De ritten worden op tijd aan elkaar gekoppeld, niet op nummer.</small>
+        </label>
+        <label class="instelveld">
+          <span data-i18n="ev_key">API-sleutel</span>
+          <input type="password" id="set-ev-key" spellcheck="false" autocomplete="new-password" placeholder="••••••••">
+          <small id="set-ev-keyhint" data-i18n="ev_key_hint">Uit EVConduit, bij je account. Wordt alleen op de server bewaard.</small>
+        </label>
+      </div>
+
+      <div class="instelrij">
+        <label class="instelveld">
+          <span data-i18n="ev_marge">Klokmarge in seconden</span>
+          <input type="number" id="set-ev-marge" min="0" max="3600" step="10" placeholder="180">
+          <small data-i18n="ev_marge_hint">De dashcam en de auto lopen nooit precies gelijk. Hoeveel verschil je nog goedkeurt.</small>
+        </label>
+        <label class="instelveld vinkje">
+          <input type="checkbox" id="set-ev-aan">
+          <span data-i18n="ev_aan">Gegevens van de auto ophalen</span>
+        </label>
+      </div>
+
+      <div class="instelknoppen">
+        <button class="small ghost" id="btn-evtoets" data-i18n="ev_test">Verbinding testen</button>
+        <button class="small ghost" id="btn-evvergeet" data-i18n="ev_forget">Opgehaalde gegevens wissen</button>
+        <span class="instelmelding" id="set-ev-melding"></span>
+      </div>
+
       <div class="instelknoppen">
         <button class="small ghost" id="btn-instelcheck" data-i18n="test">Map testen</button>
         <button class="small" id="btn-instelbewaar" data-i18n="save">Bewaren</button>
@@ -206,6 +242,6 @@
 </div>
 
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=43"></script>
+<script src="app.js?v=44"></script>
 </body>
 </html>

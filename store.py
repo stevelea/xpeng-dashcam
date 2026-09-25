@@ -16,6 +16,9 @@ DEFAULTS = {
     'folders': {'normaal': 'XP_DCIM', 'noodgeval': 'XP_EMER_DCIM'},
     'timezone': 'Europe/Amsterdam',
     'views': {'primary': 'front'},
+    # Waar de gegevens van de auto vandaan komen. Leeg = de functie doet niets.
+    # `marge_s` is de speling op de klok tussen dashcam en auto; zie evconduit.py.
+    'evconduit': {'url': '', 'sleutel': '', 'marge_s': 180, 'aan': True},
 }
 # 14 cijfers is de tijd (JJJJMMDDuummss); sommige modellen zetten er milliseconden
 # achter. De weergave achter het onderstrepingsteken is vrij: front, front_and_360,
@@ -97,6 +100,27 @@ CREATE INDEX IF NOT EXISTS idx_wp_trip ON waypoints(trip_id, ts);
 CREATE TABLE IF NOT EXISTS places (
     cell TEXT PRIMARY KEY,
     name TEXT
+);
+
+-- Wat de auto zelf van een rit weet, opgehaald bij EVConduit.
+--
+-- De sleutel is de start_ts van ONZE rit en niet het ritnummer: build() gooit alle
+-- ritten weg en maakt ze opnieuw aan, dus een nummer wijst na de volgende index
+-- naar een andere rit. Een tijdstip overleeft dat wel — dezelfde reden waarom
+-- herkoppel_waypoints() de punten op tijd opnieuw vastknoopt.
+--
+-- Bewaard en niet bij elk bezoek opnieuw opgehaald: het is een externe dienst, en
+-- een rit van gisteren verandert niet meer. Verversen kan met een POST.
+CREATE TABLE IF NOT EXISTS xpeng_ritten (
+    start_ts  TEXT PRIMARY KEY,
+    xpeng_id  TEXT,
+    vin       TEXT,
+    rit       TEXT,
+    spoor     TEXT,
+    dekking   REAL,
+    marge_s   INTEGER,
+    twijfel   INTEGER NOT NULL DEFAULT 0,
+    opgehaald TEXT
 );
 """
 

@@ -1,0 +1,384 @@
+#!/usr/bin/env python3
+"""Toets de koppeling tussen onze ritten en die van EVConduit, zonder netwerk.
+
+Draaien:  python3 toets_evconduit.py
+
+De interessantste gevallen zijn niet "vindt hij de rit" maar de randen: een rit
+die alleen op de marge past mag geen treffer heten, en de zomertijd moet niet
+stilletjes een uur verschuiven.
+"""
+import json
+import sys
+import tempfile
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import store
+import evconduit
+
+TMP = Path(tempfile.mkdtemp())
+store.DB_PATH = TMP / 'toets.db'
+store._config = {
+    'timezone': 'Europe/Amsterdam',
+    'evconduit': {'url': 'https://voorbeeld.test', 'sleutel': 'geheim',
+                  'marge_s': 180, 'aan': True},
+}
+
+fouten = []
+
+
+def check(label, ok, detail=''):
+    print(f"{'OK  ' if ok else 'FOUT'}  {label}{'  — ' + str(detail) if detail else ''}")
+    if not ok:
+        fouten.append(label)
+
+
+def rit(start_ts, end_ts):
+    return {'id': 1, 'day': start_ts[:10], 'start_ts': start_ts, 'end_ts': end_ts,
+            'clips': 10, 'seconds': 1080, 'km': 14.3, 'measured': 10, 'note': None}
+
+
+def auto(started, ended, **extra):
+    rij = {'id': 'uuid-1', 'vin': 'L1NSPGHB1PA000001', 'started_at': started,
+           'ended_at': ended, 'duration_seconds': int(
+               (datetime.fromisoformat(ended.replace('Z', '+00:00'))
+                - datetime.fromisoformat(started.replace('Z', '+00:00'))).total_seconds()),
+           'distance_km': 14.1, 'energy_kwh': 2.4, 'max_speed_kmh': 112,
+           'mean_moving_speed_kmh': 47, 'odometer_start': 12000, 'odometer_end': 12014,
+           'soc_start': 71, 'soc_end': 66, 'regen_kwh': 0.4, 'user_id': 'prive',
+           'export_id': 'ook-prive'}
+    rij.update(extra)
+    return rij
+
+
+TIJDEN = None
+
+
+def nep_get(url, params=None, headers=None, timeout=None):
+    """Doet zich voor als EVConduit. Onthoudt welke paden zijn opgevraagd."""
+    TIJDEN.append(url)
+    class R:
+        status_code = 200
+        def __init__(self, d):
+            self._d = d
+        def json(self):
+            return self._d
+    if url.endswith('/user/xpeng/trips'):
+        return R({'trips': NEP_RITTEN})
+    if '/track' in url:
+        return R(NEP_SPOOR)
+    return R({})
+
+
+NEP_RITTEN = []
+NEP_SPOOR = {}
+
+
+def met_ritten(rijen, spoor=None):
+    global NEP_RITTEN, NEP_SPOOR
+    NEP_RITTEN = rijen
+    NEP_SPOOR = spoor or {'available': False, 'reason': 'no_positions', 'seconds': [],
+                          'lat': [], 'lon': [], 'point_count': 0, 'source_point_count': 0,
+                          'coverage': None, 'covered_seconds': None, 'trip_seconds': None,
+                          'largest_gap_seconds': None, 'track_distance_km': None,
+                          'window': None}
+
+
+evconduit.httpx.get = nep_get
+
+# ── 1. Tijdzone: lokale dashcam-tijd moet UTC worden ──────────────────────────
+con = store.connect()
+t = rit('2026-09-14T14:23:00', '2026-09-14T14:41:00')
+ons = evconduit._ons_venster(t)
+check('zomertijd: 14:23 lokaal is 12:23 UTC',
+      ons[0].strftime('%H:%M') == '12:23' and ons[1].strftime('%H:%M') == '12:41',
+      f'{ons[0].isoformat()} .. {ons[1].isoformat()}')
+
+# wintertijd: dezelfde kloktijd is een uur eerder in UTC
+store._config['timezone'] = 'Europe/Amsterdam'
+t_winter = rit('2026-01-14T14:23:00', '2026-01-14T14:41:00')
+ons_w = evconduit._ons_venster(t_winter)
+check('wintertijd: 14:23 lokaal is 13:23 UTC',
+      ons_w[0].strftime('%H:%M') == '13:23', ons_w[0].isoformat())
+
+# ── 2. Een rit die precies past ───────────────────────────────────────────────
+TIJDEN = []
+met_ritten([auto('2026-09-14T12:23:14Z', '2026-09-14T12:41:22Z')])
+d = evconduit.koppel(con, t)
+check('precies passende rit wordt gevonden', d['beschikbaar'], d['reden'])
+check('dekking is 0.987: de auto begint 14 s later dan wij',
+      d['dekking'] == 0.987, d['dekking'])
+check('klokverschil wordt gemeld, niet weggepoetst',
+      d['rit'] is not None, json.dumps(d.get('rit', {}).get('started_at')))
+kand = evconduit._kandidaten(ons, NEP_RITTEN, 180)[0]
+check('startafwijking is +14 s', kand['start_afwijking_s'] == 14, kand['start_afwijking_s'])
+check('eindafwijking is +22 s', kand['eind_afwijking_s'] == 22, kand['eind_afwijking_s'])
+check('prive-velden niet bewaard', 'user_id' not in (d['rit'] or {}), list((d['rit'] or {}).keys())[:4])
+
+# ── 3. Ver uit elkaar: geen treffer, en dat is geen fout ──────────────────────
+met_ritten([auto('2026-09-14T05:00:00Z', '2026-09-14T05:20:00Z')])
+d = evconduit.koppel(con, t, forceer=True)
+check('rit van uren later is geen treffer', d['reden'] == 'geen_rit', d['reden'])
+
+# ── 4. Alleen op de marge: twijfel, geen treffer ──────────────────────────────
+# Onze rit eindigt 12:41; de auto begint 12:44 — 3 min later, dus binnen marge 180 s
+met_ritten([auto('2026-09-14T12:44:00Z', '2026-09-14T13:00:00Z')])
+d = evconduit.koppel(con, t, forceer=True)
+check('alleen op de marge = twijfel', d['reden'] == 'twijfel', (d['reden'], d.get('dekking')))
+check('bij twijfel geen spoor', d['spoor'] is None, d['spoor'])
+
+# ── 5. Twee ritten die allebei een stuk dekken: ambigu ────────────────────────
+met_ritten([auto('2026-09-14T12:23:00Z', '2026-09-14T12:50:00Z', id='a'),
+            auto('2026-09-14T12:30:00Z', '2026-09-14T13:10:00Z', id='b')])
+d = evconduit.koppel(con, t, forceer=True)
+check('beste treffer gekozen', d['beschikbaar'] and d['rit']['id'] == 'a', d.get('rit', {}).get('id'))
+check('tweede kandidaat wordt gemeld', len(d['kandidaten']) == 1, len(d['kandidaten']))
+
+# ── 6. Spoor wordt GeoJSON met [lon, lat] ─────────────────────────────────────
+met_ritten([auto('2026-09-14T12:23:00Z', '2026-09-14T12:41:00Z')],
+           spoor={'available': True, 'reason': None, 'seconds': [0, 60, 120],
+                  'lat': [52.1, 52.2, 52.3], 'lon': [5.1, 5.2, 5.3],
+                  'point_count': 3, 'source_point_count': 900, 'coverage': 0.87,
+                  'covered_seconds': 940, 'trip_seconds': 1080,
+                  'largest_gap_seconds': 42, 'track_distance_km': 13.8,
+                  'window': {'from': 'x', 'to': 'y'}})
+d = evconduit.koppel(con, t, forceer=True)
+s = d['spoor']
+check('spoor beschikbaar', bool(s and s['beschikbaar']))
+check('GeoJSON is [lon, lat]', s['geojson']['coordinates'][0] == [5.1, 52.1],
+      s['geojson']['coordinates'][0])
+check('dekking van het spoor reist mee', s['dekking'] == 0.87, s['dekking'])
+check('grootste gat reist mee', s['grootste_gat_s'] == 42, s['grootste_gat_s'])
+check('spoorlengte naast ritafstand', s['spoor_km'] == 13.8 and d['rit']['distance_km'] == 14.1)
+
+# ── 7. Niets ingesteld: geen aanroep, geen fout ───────────────────────────────
+store._config['evconduit'] = {'url': '', 'sleutel': '', 'marge_s': 180, 'aan': True}
+evconduit.vergeet(con)
+TIJDEN = []
+d = evconduit.koppel(con, t)
+check('zonder instelling geen netwerkverkeer', TIJDEN == [], TIJDEN)
+check('en de reden is geen_evconduit', d['reden'] == 'geen_evconduit', d['reden'])
+
+# ── 7b. Uitgeschakeld betekent uit, ook voor de cache ────────────────────────
+met_ritten([auto('2026-09-14T12:23:00Z', '2026-09-14T12:41:00Z')])
+store._config['evconduit'] = {'url': 'https://voorbeeld.test', 'sleutel': 'geheim',
+                              'marge_s': 180, 'aan': True}
+evconduit.koppel(con, t, forceer=True)          # vult de cache
+store._config['evconduit'] = {**store._config['evconduit'], 'aan': False}
+d = evconduit.koppel(con, t)
+check('uitgeschakeld verbergt ook wat bewaard is', d['reden'] == 'geen_evconduit', d['reden'])
+store._config['evconduit'] = {**store._config['evconduit'], 'aan': True}
+d = evconduit.koppel(con, t)
+check('weer aan: de cache is er nog', d['beschikbaar'], d['reden'])
+
+# ── 8. Cache: tweede keer geen nieuwe oproep ──────────────────────────────────
+store._config['evconduit'] = {'url': 'https://voorbeeld.test', 'sleutel': 'geheim',
+                              'marge_s': 180, 'aan': True}
+met_ritten([auto('2026-09-14T12:23:00Z', '2026-09-14T12:41:00Z')])
+evconduit.vergeet(con)
+TIJDEN = []
+evconduit.koppel(con, t, forceer=True)
+eerste = len(TIJDEN)
+TIJDEN = []
+evconduit.koppel(con, t)
+check('tweede keer komt uit de cache', TIJDEN == [], f'eerste={eerste} tweede={TIJDEN}')
+
+# ── 9. De sleutel komt nooit naar buiten ──────────────────────────────────────
+import app as app_mod
+gelezen = app_mod.settings_lezen()
+check('sleutel niet in /api/settings', 'sleutel' not in gelezen['evconduit'],
+      list(gelezen['evconduit'].keys()))
+check('wel of er een sleutel staat', gelezen['evconduit']['heeft_sleutel'] is True)
+
+# ── 10. Leeg sleutelveld laat de sleutel staan ────────────────────────────────
+bewaard = app_mod._evconduit_bewaren({'url': 'https://a.test', 'sleutel': 'bestaand'},
+                                     {'url': 'https://b.test', 'marge_s': '240'})
+check('leeg sleutelveld wist niet', bewaard['sleutel'] == 'bestaand', bewaard)
+check('marge wordt een getal', bewaard['marge_s'] == 240 and isinstance(bewaard['marge_s'], int))
+check('url bijgewerkt', bewaard['url'] == 'https://b.test', bewaard['url'])
+try:
+    app_mod._evconduit_bewaren({}, {'url': 'javascript:alert(1)'})
+    check('onzin-adres geweigerd', False, 'geen fout')
+except Exception as exc:
+    check('onzin-adres geweigerd', 'http' in str(exc), exc)
+
+# ── 11. Onze tijd staat MET zone in de index ─────────────────────────────────
+# De echte index bewaart "2026-09-16T10:56:22+10:00", niet een naïeve tijd. Wie
+# die zone negeert en de zone uit config.json plakt, verschuift elke rit zodra de
+# twee van elkaar afwijken.
+store._config['timezone'] = 'Australia/Sydney'
+t_syd = rit('2026-09-16T10:56:22+10:00', '2026-09-16T11:19:24+10:00')
+ons_syd = evconduit._ons_venster(t_syd)
+check('zone uit de index wordt gebruikt', ons_syd[0].strftime('%Y-%m-%d %H:%M') == '2026-09-16 00:56',
+      ons_syd[0].isoformat())
+store._config['timezone'] = 'Europe/Amsterdam'
+ons_amr = evconduit._ons_venster(t_syd)
+check('een andere config-zone verschuift een tijd met zone niet',
+      ons_amr[0] == ons_syd[0], f'{ons_amr[0].isoformat()} vs {ons_syd[0].isoformat()}')
+store._config['timezone'] = 'Europe/Amsterdam'
+
+# ── 12. Een hele dag in één verzoek ──────────────────────────────────────────
+evconduit.vergeet(con)
+drie = [
+    {'id': 101, 'day': '2026-09-14', 'start_ts': '2026-09-14T14:23:00',
+     'end_ts': '2026-09-14T14:41:00', 'clips': 10, 'seconds': 1080, 'km': None,
+     'measured': 0, 'note': None},
+    {'id': 102, 'day': '2026-09-14', 'start_ts': '2026-09-14T16:05:00',
+     'end_ts': '2026-09-14T16:25:00', 'clips': 8, 'seconds': 1200, 'km': None,
+     'measured': 0, 'note': None},
+    {'id': 103, 'day': '2026-09-14', 'start_ts': '2026-09-14T18:40:00',
+     'end_ts': '2026-09-14T19:05:00', 'clips': 9, 'seconds': 1500, 'km': 7.2,
+     'measured': 9, 'note': None},
+]
+# Onze tijden zijn lokale tijd (juli: UTC+2), de auto meldt UTC.
+met_ritten([auto('2026-09-14T12:23:10Z', '2026-09-14T12:41:00Z', id='a'),
+            auto('2026-09-14T14:05:05Z', '2026-09-14T14:25:00Z', id='b'),
+            auto('2026-09-14T16:40:00Z', '2026-09-14T19:05:00Z', id='c')])
+TIJDEN = []
+uit = evconduit.koppel_veel(con, drie, met_spoor=False)
+check('drie ritten in één keer gekoppeld',
+      len(uit) == 3 and all(v['beschikbaar'] for v in uit.values()),
+      {k: v['reden'] for k, v in uit.items()})
+check('de rittenlijst maar ÉÉN keer opgehaald',
+      len([u for u in TIJDEN if u.endswith('/user/xpeng/trips')]) == 1,
+      [u.split('/api')[-1] for u in TIJDEN])
+check('zonder spoor geen spoorverzoek', not any('/track' in u for u in TIJDEN), TIJDEN)
+
+auto_per_rit = evconduit.dag_auto(con, drie)
+check('dag_auto sleutelt op ons ritnummer', set(auto_per_rit) == {'101', '102', '103'},
+      list(auto_per_rit))
+check('dag_auto geeft de afstand van de auto', auto_per_rit['101']['km'] == 14.1,
+      auto_per_rit['101'])
+check('dag_auto meldt of het zeker is', auto_per_rit['101']['zeker'] is True)
+
+# ── 13. Het spoor wordt alsnog opgehaald als alleen de tegel het vroeg ───────
+met_ritten([auto('2026-09-14T12:23:10Z', '2026-09-14T12:41:00Z')],
+           spoor={'available': True, 'reason': None, 'seconds': [0, 60],
+                  'lat': [52.1, 52.2], 'lon': [5.1, 5.2], 'point_count': 2,
+                  'source_point_count': 500, 'coverage': 0.9, 'covered_seconds': 970,
+                  'trip_seconds': 1080, 'largest_gap_seconds': 30,
+                  'track_distance_km': 13.9, 'window': None})
+TIJDEN = []
+d = evconduit.koppel(con, drie[0])
+check('spoor wordt alsnog opgehaald na een tegel-koppeling',
+      any('/track' in u for u in TIJDEN), TIJDEN)
+check('en het is er ook', bool(d['spoor'] and d['spoor']['beschikbaar']), d['spoor'])
+TIJDEN = []
+evconduit.koppel(con, drie[0])
+check('tweede keer komt het spoor uit de cache', TIJDEN == [], TIJDEN)
+
+# ── 14. Een koppeling van een dag die niets oplevert ─────────────────────────
+# Eerst de cache leeg: rit 102 is hierboven al gekoppeld en zonder dit antwoordt de
+# cache in plaats van EVConduit.
+evconduit.vergeet(con)
+met_ritten([auto('2026-09-14T02:00:00Z', '2026-09-14T02:30:00Z')])
+leeg = evconduit.dag_auto(con, [drie[1]])
+check('geen treffer betekent geen afstand', leeg['102']['km'] is None, leeg['102'])
+check('en zeker is dan onwaar', leeg['102']['zeker'] is False)
+
+# ── 15. Een link met van/tot wijst een rit aan, geen zoekvenster ─────────────
+# docs/xpeng-camera.md §1: EVConduit bouwt de link uit zijn eigen rit, dus van/tot
+# is het venster van de auto als muurklok in ONZE zone op de dag uit de link. Wij
+# zoeken de rit van ons die erop past — dezelfde afweging als bij de ritttegels.
+eigen = [
+    {'id': 201, 'day': '2026-09-14', 'start_ts': '2026-09-14T14:23:00',
+     'end_ts': '2026-09-14T14:41:00', 'clips': 10, 'seconds': 1080, 'km': None,
+     'measured': 0, 'note': None},
+    {'id': 202, 'day': '2026-09-14', 'start_ts': '2026-09-14T16:05:00',
+     'end_ts': '2026-09-14T16:25:00', 'clips': 8, 'seconds': 1200, 'km': None,
+     'measured': 0, 'note': None},
+    {'id': 203, 'day': '2026-09-14', 'start_ts': '2026-09-14T16:00:00',
+     'end_ts': '2026-09-14T16:12:00', 'clips': 6, 'seconds': 720, 'km': None,
+     'measured': 0, 'note': None},
+]
+gevonden = evconduit.rit_bij_venster(eigen, '2026-09-14', '14:23:00', '14:41:00')
+check('van/tot vindt de rit die er precies op past',
+      bool(gevonden) and gevonden['rit']['id'] == 201, gevonden and gevonden['rit']['id'])
+check('en de dekking is 1.0', gevonden and gevonden['dekking'] == 1.0,
+      gevonden and gevonden['dekking'])
+check('de klokafwijking wordt ook hier gemeld',
+      gevonden and gevonden['start_afwijking_s'] == 0 and gevonden['eind_afwijking_s'] == 0,
+      gevonden and (gevonden['start_afwijking_s'], gevonden['eind_afwijking_s']))
+
+gevonden = evconduit.rit_bij_venster(eigen, '2026-09-14', '14:24:30', '14:41:00')
+check('90 seconden klokverschil past nog binnen de marge',
+      bool(gevonden) and gevonden['rit']['id'] == 201,
+      gevonden and gevonden['rit']['id'])
+check('met de afwijking erbij', gevonden and gevonden['start_afwijking_s'] == 90,
+      gevonden and gevonden['start_afwijking_s'])
+
+gevonden = evconduit.rit_bij_venster(eigen, '2026-09-14', '16:05:00', '16:25:00')
+check('de beste van twee overlappende ritten wint',
+      bool(gevonden) and gevonden['rit']['id'] == 202,
+      gevonden and gevonden['rit']['id'])
+
+check('uren later is geen treffer',
+      evconduit.rit_bij_venster(eigen, '2026-09-14', '18:00:00', '18:10:00') is None)
+# Onze rit eindigt 14:41, de link begint 14:44: alleen de marge raakt. Dan is één
+# rit aanwijzen een gok en blijft zoeken rond tijd/venster over.
+check('alleen op de marge raken is geen treffer',
+      evconduit.rit_bij_venster(eigen, '2026-09-14', '14:44:00', '15:00:00') is None)
+
+# De dag uit de link bepaalt het moment: dezelfde kloktijd op een andere dag hoort
+# niet op onze rit van de 14e te passen.
+check('dezelfde kloktijd op een andere dag past niet',
+      evconduit.rit_bij_venster(eigen, '2026-09-15', '14:23:00', '14:41:00') is None)
+
+check('onbruikbare tijden geven geen venster',
+      evconduit._dagvenster('2026-09-14', 'kwart voor drie', '14:41:00') is None)
+check('een omgekeerd venster geeft geen venster',
+      evconduit._dagvenster('2026-09-14', '14:41:00', '14:23:00') is None)
+
+# Wintertijd: dezelfde muurklok is in januari een uur eerder in UTC. Wie de link als
+# UTC leest, vindt hier niets — en dat is precies waar het misgaat.
+winter = [{'id': 301, 'day': '2026-01-14', 'start_ts': '2026-01-14T14:23:00',
+           'end_ts': '2026-01-14T14:41:00', 'clips': 10, 'seconds': 1080, 'km': None,
+           'measured': 0, 'note': None}]
+gevonden = evconduit.rit_bij_venster(winter, '2026-01-14', '14:23:00', '14:41:00')
+check('in de winter wordt de link net zo goed als muurklok gelezen',
+      bool(gevonden) and gevonden['rit']['id'] == 301, gevonden and gevonden['rit']['id'])
+
+# Een tijd met zone in de index (zo schrijft de echte index) moet op zijn eigen
+# offset vergeleken worden, niet opnieuw in de config-zone geplakt. De link is
+# muurklok in de config-zone: 02:56 in Amsterdam is 00:56 UTC, en dat is de rit
+# met +10:00 ook.
+store._config['timezone'] = 'Europe/Amsterdam'
+met_zone = [{'id': 401, 'day': '2026-09-16', 'start_ts': '2026-09-16T10:56:22+10:00',
+             'end_ts': '2026-09-16T11:19:24+10:00', 'clips': 10, 'seconds': 1080,
+             'km': None, 'measured': 0, 'note': None}]
+gevonden = evconduit.rit_bij_venster(met_zone, '2026-09-16', '02:56:22', '03:19:24')
+check('een rit met zone in de index wordt op zijn eigen offset gevonden',
+      bool(gevonden) and gevonden['rit']['id'] == 401, gevonden and gevonden['rit']['id'])
+
+# ── 16. Een negatieve uitkomst is niet voor altijd waar ──────────────────────
+# EVConduit krijgt zijn ritten uit een export die later binnenkomt. Wat vandaag
+# niet matcht, kan morgen wel matchen. Een rit openen moet dan opnieuw kijken in
+# plaats van de oude "geen rit" te blijven tonen — dat is precies waar anders de
+# verversknop voor nodig was.
+store._config['timezone'] = 'Europe/Amsterdam'
+store._config['evconduit'] = {'url': 'https://voorbeeld.test', 'sleutel': 'geheim',
+                              'marge_s': 180, 'aan': True}
+evconduit.vergeet(con)
+met_ritten([])                                     # de export is er nog niet
+d = evconduit.koppel(con, t)
+check('zonder rit in EVConduit: geen treffer', d['reden'] == 'geen_rit', d['reden'])
+met_ritten([auto('2026-09-14T12:23:00Z', '2026-09-14T12:41:00Z')])
+TIJDEN = []
+d = evconduit.koppel(con, t)                       # gewone GET, geen forceer
+check('de export komt binnen: een rit openen kijkt opnieuw',
+      d['beschikbaar'], (d['reden'], TIJDEN))
+check('en haalt daar de rittenlijst voor op',
+      any(u.endswith('/user/xpeng/trips') for u in TIJDEN), TIJDEN)
+TIJDEN = []
+evconduit.koppel(con, t)
+check('een echte treffer blijft wel uit de cache komen', TIJDEN == [], TIJDEN)
+
+con.close()
+print()
+if fouten:
+    print(f'{len(fouten)} mislukt: ' + ', '.join(fouten))
+    sys.exit(1)
+print('alles goed')

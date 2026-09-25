@@ -24,5 +24,8 @@ owntracks/*-link.txt
 # NAS-specifiek: bevat het pad en eigenaar-ID van de eigen NAS
 nas-scripts/
 
+# Live deployment snapshots: contain real broker/share credentials.
+deploy/live/
+
 demo/Remmomenten/
 demo/Exports/
