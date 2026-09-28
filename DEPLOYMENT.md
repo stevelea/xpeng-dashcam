@@ -6,7 +6,7 @@ installation rather than to the software.
 
 If you only want the viewer running on one machine, **you do not need this
 file** — [INSTALL.md](INSTALL.md) covers that and it is self-contained. This is
-for reproducing the full arrangement: a Pi that copies cards, a NAS that stores
+for reproducing the full arrangement: a board that copies cards, a NAS that stores
 them, and a machine that serves the viewer.
 
 ## The three roles
@@ -15,7 +15,7 @@ They are separate on purpose, and each can live anywhere.
 
 | Role | What it does | Where it runs here |
 |---|---|---|
-| **Archiver** | Detects a plugged-in USB card and copies it to the share. No UI. | Raspberry Pi Zero W, `192.168.1.213` |
+| **Archiver** | Detects a plugged-in USB card and copies it to the share. No UI. | Orange Pi 3 LTS, `192.168.1.221` (Armbian) |
 | **Storage** | Holds the footage and the shared archive folder. | NAS, `192.168.1.235`, share `Shared_Drive` |
 | **Viewer** | Indexes the archive, serves the web UI, publishes MQTT status. | `pantry`, `192.168.1.109` (Linux, Docker) |
 | **Broker** | Carries the status entities to Home Assistant. | `192.168.1.88` (also the HA host) |
@@ -184,15 +184,15 @@ a cached page can still outlive the build.
 
 ## Setting up the archiver
 
-The Pi side is a **separate project with its own repository**:
+The archiver side is a **separate project with its own repository**:
 <https://github.com/stevelea/XpengDVRCopy> — do not look for its source in this
 one.
 
 It is a udev rule plus a systemd service running a shell script. It needs:
 
 - `cifs-utils`, `rsync`, `mosquitto-clients`
-- an `/etc/fstab` entry for the share, with `nofail` so the Pi still boots when
-  the NAS is off
+- an `/etc/fstab` entry for the share, with `nofail` so the board still boots
+  when the NAS is off
 - the script, the service and the udev rule
 
 ### The two checkouts sit next to each other, and the names do not help
@@ -200,7 +200,7 @@ It is a udev rule plus a systemd service running a shell script. It needs:
 | Folder on the share | Repository | What it is |
 |---|---|---|
 | `/Volumes/projects/XpengDashcamViewer` | `stevelea/xpeng-dashcam` | **the viewer** — the thing you deploy |
-| `/Volumes/projects/XpengDVRCopy` | `stevelea/XpengDVRCopy` | **the archiver** — the Pi's card copier |
+| `/Volumes/projects/XpengDVRCopy` | `stevelea/XpengDVRCopy` | **the archiver** — the board's card copier |
 
 Both have occupied the folder named `XpengDVRCopy` at different times, which is a
 reliable way to spend an afternoon editing one while deploying the other. `git
